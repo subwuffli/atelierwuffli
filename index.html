@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#6d3f2b">
+  <title>Atelier Wuffli ERP</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="lock-screen" class="lock-screen">
+    <form id="unlock-form" class="card lock-card">
+      <p class="eyebrow">ATELIER WUFFLI</p>
+      <h1 id="lock-title">ERP einrichten</h1>
+      <p id="lock-help" class="muted">Lege ein lokales Passwort für dieses Gerät fest.</p>
+      <label>Passwort<input id="password" type="password" minlength="6" autocomplete="current-password" required></label>
+      <button class="primary" type="submit">Weiter</button>
+      <button id="reset-link" class="text-button hidden" type="button">Passwort vergessen / alles zurücksetzen</button>
+      <p id="lock-error" class="error" role="alert"></p>
+    </form>
+  </div>
+
+  <div id="app" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand"><img src="assets/atelier-wuffli-logo.jpeg" alt="Atelier Wuffli"><div><strong>Atelier Wuffli</strong><small>Einfaches ERP</small></div></div>
+      <nav id="nav">
+        <button data-view="dashboard" class="active">Übersicht</button>
+        <button data-view="customers">Kunden</button>
+        <button data-view="orders">Aufträge</button>
+        <button data-view="invoices">Rechnungen</button>
+        <button data-view="settings">Einstellungen</button>
+      </nav>
+      <button id="lock-button" class="secondary">Sperren</button>
+    </aside>
+    <main>
+      <header class="topbar"><button id="menu-button" aria-label="Menü">☰</button><div><p class="eyebrow">LOKALE DATEN</p><h1 id="page-title">Übersicht</h1></div><button id="quick-export" class="secondary">Daten exportieren</button></header>
+      <div id="notice" class="notice hidden"></div>
+      <section id="content"></section>
+    </main>
+  </div>
+
+  <dialog id="modal"><div class="modal-shell"><header><h2 id="modal-title"></h2><button type="button" onclick="closeModal()" aria-label="Schliessen">×</button></header><div id="modal-body"></div></div></dialog>
+  <input id="import-file" type="file" accept="application/json,.json" hidden>
+  <script src="app.js"></script>
+</body>
+</html>
