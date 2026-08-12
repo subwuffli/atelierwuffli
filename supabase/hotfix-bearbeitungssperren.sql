@@ -8,6 +8,10 @@ create table if not exists public.edit_locks (
   primary key(entity_type, entity_id)
 );
 alter table public.edit_locks add column if not exists session_token uuid not null default gen_random_uuid();
+
+-- Alte Sperren aus früheren Funktionsversionen entfernen. Es werden nur
+-- temporäre Bearbeitungsmarkierungen gelöscht, keine ERP-Daten.
+delete from public.edit_locks where true;
 alter table public.edit_locks enable row level security;
 drop policy if exists authenticated_all on public.edit_locks;
 create policy authenticated_all on public.edit_locks for all to authenticated using (true) with check (true);

@@ -302,7 +302,14 @@ function repairEncoding(value){
 
 const originalCustomerForm=customerForm;
 customerForm=async function(id){
-  if(id&&!(await acquireEditLock('customer',id))){alert('Dieser Kunde wird gerade auf einem anderen Gerät bearbeitet. Bitte versuche es später erneut.');return}
+  if(id){
+    try{
+      if(!(await acquireEditLock('customer',id))){alert('Dieser Kunde wird gerade auf einem anderen Gerät bearbeitet. Bitte versuche es später erneut.');return}
+    }catch(error){
+      console.error('Bearbeitungssperre nicht verfügbar:',error);
+      notice(`Bearbeitungssperre nicht verfügbar: ${error?.message||'Unbekannter Fehler'}. Die Änderung wird beim Speichern auf Konflikte geprüft.`);
+    }
+  }
   originalCustomerForm(id);
 };
 renderCustomers=renderCloudCustomers;
