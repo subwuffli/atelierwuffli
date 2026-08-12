@@ -6,6 +6,8 @@ const SUPABASE_URL='https://jhokbmlozygtfjsqfkdu.supabase.co';
 const SUPABASE_KEY='sb_publishable_DGpxSu1ppS0fY7nbE75RSg_rI7G8UAb';
 let supabaseClient=null;
 
+supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 const blankState=()=>({version:1,auth:null,settings:{name:'',address:'',iban:'',paymentDays:30,logo:'',orderText:'',invoiceText:''},customers:[],orders:[],invoices:[],counters:{},lastExport:null});
 const uid=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`;
 const today=()=>new Date().toISOString().slice(0,10);
