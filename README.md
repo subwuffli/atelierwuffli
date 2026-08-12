@@ -1,5 +1,9 @@
 # Atelier Wuffli ERP
 
+Aktuelle Version: **V0.0.1**
+
+Bei jeder veröffentlichten Änderung wird die letzte Versionsstelle um eins erhöht (`V0.0.2`, `V0.0.3`, …). Die Version wird in der Seitenleiste oberhalb von **Sperren** angezeigt.
+
 Deutschsprachiges Mehrbenutzer-ERP für Kunden, Aufträge und Rechnungen. Die Anwendung wird über GitHub Pages ausgeliefert; Anmeldung und sämtliche Geschäftsdaten liegen in Supabase.
 
 ## Supabase einmalig einrichten
