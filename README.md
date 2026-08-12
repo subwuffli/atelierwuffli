@@ -1,10 +1,12 @@
 # Atelier Wuffli ERP
 
-Aktuelle Version: **V0.0.11**
+Aktuelle Version: **V0.0.12**
 
 Bei jeder veröffentlichten Änderung wird die letzte Versionsstelle um eins erhöht (`V0.0.2`, `V0.0.3`, …). Die Version wird in der Seitenleiste oberhalb von **Sperren** angezeigt.
 
-Deutschsprachiges Mehrbenutzer-ERP für Kunden, Aufträge und Rechnungen. Die Anwendung wird über GitHub Pages ausgeliefert; Anmeldung und sämtliche Geschäftsdaten liegen in Supabase.
+Deutschsprachiges Mehrbenutzer-ERP für Kunden, Aufträge, Rechnungen und Quittungen. Die Anwendung wird über GitHub Pages ausgeliefert; Anmeldung und sämtliche Geschäftsdaten liegen in Supabase.
+
+Bezahlte Rechnungen können als nummerierte Quittung (`QU-JJ-MM-TT-XXX`) ausgegeben werden. Quittungen stehen als PDF und Druckansicht zur Verfügung.
 
 ## Supabase einmalig einrichten
 
@@ -13,6 +15,8 @@ Deutschsprachiges Mehrbenutzer-ERP für Kunden, Aufträge und Rechnungen. Die An
 3. Unter **Authentication → Users** alle gewünschten ERP-Benutzer anlegen.
 4. Selbstregistrierung deaktiviert lassen, wenn Benutzer nur durch den Administrator angelegt werden sollen.
 5. Danach die GitHub-Pages-Anwendung neu laden und anmelden.
+
+Bei einem bestehenden Datenbestand für V0.0.12 einmalig `supabase/hotfix-quittungen.sql` im SQL Editor ausführen.
 
 Falls bereits Daten in der früheren Tabelle `erp_data` liegen, übernimmt die Migration sie beim ersten Lauf automatisch in die neuen Tabellen. Die alte Tabelle wird vorsichtshalber nicht gelöscht.
 

@@ -67,6 +67,13 @@ create table if not exists public.invoice_items (
 );
 create index if not exists invoice_items_invoice_idx on public.invoice_items(invoice_id);
 
+create table if not exists public.receipts (
+  id uuid primary key default gen_random_uuid(), number text not null unique, receipt_date date not null,
+  invoice_id uuid not null unique references public.invoices(id) on delete cascade, invoice_number text not null,
+  data jsonb not null default '{}'::jsonb, created_at timestamptz not null default now()
+);
+create index if not exists receipts_date_idx on public.receipts(receipt_date);
+
 create table if not exists public.document_counters (
   prefix text not null, counter_date date not null, value integer not null default 0,
   primary key(prefix, counter_date)
@@ -90,11 +97,12 @@ alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 alter table public.invoices enable row level security;
 alter table public.invoice_items enable row level security;
+alter table public.receipts enable row level security;
 alter table public.document_counters enable row level security;
 alter table public.edit_locks enable row level security;
 
 do $$ declare t text; begin
-  foreach t in array array['erp_meta','company_settings','customers','delivery_addresses','orders','order_items','invoices','invoice_items','document_counters','edit_locks'] loop
+  foreach t in array array['erp_meta','company_settings','customers','delivery_addresses','orders','order_items','invoices','invoice_items','receipts','document_counters','edit_locks'] loop
     execute format('drop policy if exists authenticated_all on public.%I', t);
     execute format('create policy authenticated_all on public.%I for all to authenticated using (true) with check (true)', t);
   end loop;
@@ -111,6 +119,7 @@ grant select, insert, update, delete on table
   public.order_items,
   public.invoices,
   public.invoice_items,
+  public.receipts,
   public.document_counters
   ,public.edit_locks
 to authenticated;
@@ -124,6 +133,7 @@ revoke all on table
   public.order_items,
   public.invoices,
   public.invoice_items,
+  public.receipts,
   public.document_counters
   ,public.edit_locks
 from anon;
@@ -132,11 +142,13 @@ create or replace function public.next_document_number(p_prefix text, p_date dat
 returns text language plpgsql security invoker set search_path=public as $$
 declare n integer;
 begin
-  if p_prefix not in ('AF','RE') then raise exception 'Ungültiges Präfix'; end if;
+  if p_prefix not in ('AF','RE','QU') then raise exception 'Ungültiges Präfix'; end if;
   if p_prefix='AF' then
     select coalesce(max(split_part(number,'-',5)::integer),0)+1 into n from orders where order_date=p_date and number ~ '^AF-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{3}$';
-  else
+  elsif p_prefix='RE' then
     select coalesce(max(split_part(number,'-',5)::integer),0)+1 into n from invoices where invoice_date=p_date and number ~ '^RE-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{3}$';
+  else
+    select coalesce(max(split_part(number,'-',5)::integer),0)+1 into n from receipts where receipt_date=p_date and number ~ '^QU-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{3}$';
   end if;
   insert into document_counters(prefix,counter_date,value) values(p_prefix,p_date,n)
   on conflict(prefix,counter_date) do update set value=document_counters.value+1 returning value into n;
@@ -160,18 +172,19 @@ select jsonb_build_object(
   'settings',(select jsonb_build_object('name',name,'address',address,'iban',iban,'paymentDays',payment_days,'logo',logo,'orderText',order_text,'invoiceText',invoice_text) from company_settings where id='main'),
   'customers',coalesce((select jsonb_agg(jsonb_build_object('id',c.id,'number',c.number,'company',c.company,'salutation',c.salutation,'firstName',c.first_name,'lastName',c.last_name,'email',c.email,'phone',c.phone,'street',c.street,'zip',c.zip,'city',c.city,'notes',c.notes,'archived',c.archived,'createdAt',c.created_at,'updatedAt',c.updated_at,'deliveries',coalesce((select jsonb_agg(jsonb_build_object('id',d.id,'label',d.label,'street',d.street,'city',d.city) order by d.sort_order) from delivery_addresses d where d.customer_id=c.id),'[]'::jsonb))) from customers c),'[]'::jsonb),
   'orders',coalesce((select jsonb_agg(jsonb_build_object('id',o.id,'number',o.number,'date',o.order_date,'customerId',o.customer_id,'fulfilment',o.fulfilment,'fulfilmentDate',o.fulfilment_date,'deliveryIndex',o.delivery_index,'status',o.status,'text',o.text,'notes',o.notes,'total',o.total,'customerSnapshot',o.customer_snapshot,'archived',o.archived,'createdAt',o.created_at,'updatedAt',o.updated_at,'invoiceId',(select i.id from invoices i where i.order_id=o.id limit 1),'items',coalesce((select jsonb_agg(jsonb_build_object('id',x.id,'description',x.description,'quantity',x.quantity,'price',x.price,'total',x.total) order by x.sort_order) from order_items x where x.order_id=o.id),'[]'::jsonb))) from orders o),'[]'::jsonb),
-  'invoices',coalesce((select jsonb_agg(jsonb_build_object('id',i.id,'number',i.number,'date',i.invoice_date,'dueDate',i.due_date,'orderId',i.order_id,'orderNumber',i.order_number,'customerId',i.customer_id,'status',i.status,'text',i.text,'total',i.total,'customerSnapshot',i.customer_snapshot,'archived',i.archived,'createdAt',i.created_at,'updatedAt',i.updated_at,'items',coalesce((select jsonb_agg(jsonb_build_object('id',x.id,'description',x.description,'quantity',x.quantity,'price',x.price,'total',x.total) order by x.sort_order) from invoice_items x where x.invoice_id=i.id),'[]'::jsonb))) from invoices i),'[]'::jsonb)
+  'invoices',coalesce((select jsonb_agg(jsonb_build_object('id',i.id,'number',i.number,'date',i.invoice_date,'dueDate',i.due_date,'orderId',i.order_id,'orderNumber',i.order_number,'customerId',i.customer_id,'status',i.status,'text',i.text,'total',i.total,'customerSnapshot',i.customer_snapshot,'archived',i.archived,'createdAt',i.created_at,'updatedAt',i.updated_at,'receipt',(select r.data||jsonb_build_object('id',r.id,'number',r.number,'date',r.receipt_date,'invoiceId',r.invoice_id,'invoiceNumber',r.invoice_number,'createdAt',r.created_at) from receipts r where r.invoice_id=i.id),'items',coalesce((select jsonb_agg(jsonb_build_object('id',x.id,'description',x.description,'quantity',x.quantity,'price',x.price,'total',x.total) order by x.sort_order) from invoice_items x where x.invoice_id=i.id),'[]'::jsonb))) from invoices i),'[]'::jsonb)
 );
 $$;
 
 create or replace function public.replace_erp_backup(p_data jsonb, p_expected_revision bigint default null)
 returns bigint language plpgsql security invoker set search_path=public as $$
-declare current_revision bigint; c jsonb; d jsonb; o jsonb; x jsonb; i jsonb;
+declare current_revision bigint; c jsonb; d jsonb; o jsonb; x jsonb; i jsonb; r jsonb;
 begin
   select revision into current_revision from erp_meta where id='main' for update;
   if p_expected_revision is not null and current_revision <> p_expected_revision then
     raise exception 'CONFLICT: Daten wurden zwischenzeitlich von einem anderen Benutzer geändert';
   end if;
+  delete from receipts where true;
   delete from invoice_items where true;
   delete from invoices where true;
   delete from order_items where true;
@@ -192,6 +205,10 @@ begin
   for i in select * from jsonb_array_elements(coalesce(p_data->'invoices','[]')) loop
     insert into invoices(id,number,invoice_date,due_date,order_id,order_number,customer_id,status,text,total,customer_snapshot,archived,created_at,updated_at) values((i->>'id')::uuid,i->>'number',(i->>'date')::date,(i->>'dueDate')::date,nullif(i->>'orderId','')::uuid,coalesce(i->>'orderNumber',''),(i->>'customerId')::uuid,i->>'status',coalesce(i->>'text',''),coalesce((i->>'total')::numeric,0),coalesce(i->'customerSnapshot','{}'),coalesce((i->>'archived')::boolean,false),coalesce((i->>'createdAt')::timestamptz,now()),coalesce((i->>'updatedAt')::timestamptz,now()));
     for x in select * from jsonb_array_elements(coalesce(i->'items','[]')) loop insert into invoice_items(id,invoice_id,description,quantity,price,total) values(coalesce((x->>'id')::uuid,gen_random_uuid()),(i->>'id')::uuid,x->>'description',(x->>'quantity')::numeric,(x->>'price')::numeric,(x->>'total')::numeric); end loop;
+    r:=i->'receipt';
+    if r is not null and jsonb_typeof(r)='object' then
+      insert into receipts(id,number,receipt_date,invoice_id,invoice_number,data,created_at) values((r->>'id')::uuid,r->>'number',(r->>'date')::date,(i->>'id')::uuid,coalesce(r->>'invoiceNumber',i->>'number'),r-'id'-'number'-'date'-'invoiceId'-'invoiceNumber'-'createdAt',coalesce((r->>'createdAt')::timestamptz,now()));
+    end if;
   end loop;
   update erp_meta set revision=revision+1,updated_at=now(),updated_by=auth.uid() where id='main' returning revision into current_revision;
   return current_revision;
