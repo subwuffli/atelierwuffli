@@ -152,6 +152,11 @@ function bindGlobal(){
   };
 
   $('#quick-export').onclick=exportData;
+  $('#reload-button').onclick=async()=>{
+    if($('#modal').open&&!confirm('Das Formular ist noch geöffnet. Nicht gespeicherte Eingaben verwerfen und aktuelle Daten laden?'))return;
+    await releaseCurrentEditLock();if($('#modal').open)$('#modal').close();
+    try{await reloadCloudData()}catch(error){alert(`Neu laden fehlgeschlagen: ${error.message}`)}
+  };
   $('#import-file').onchange=importCloudData;
   $('#modal').addEventListener('close',()=>releaseCurrentEditLock());
 }
