@@ -236,4 +236,4 @@ async function importCloudData(e){
 }
 
 Object.assign(window,{customerForm,orderForm,invoiceForm,createInvoice,printDocument,toggleArchive,exportData,closeModal,resetEverything,reloadCloudData});
-init().catch(err=>{console.error(err);alert('Supabase konnte nicht geladen werden. Bitte Internetverbindung und Datenbankeinrichtung prüfen.')});
+init().catch(err=>{console.error(err);alert(`Supabase konnte nicht geladen werden. ${err?.message||'Bitte Internetverbindung und Datenbankeinrichtung prüfen.'}`)});

@@ -89,6 +89,32 @@ do $$ declare t text; begin
   end loop;
 end $$;
 
+-- RLS legt fest, welche Zeilen sichtbar sind; GRANT erlaubt angemeldeten
+-- Benutzern erst grundsätzlich den Tabellenzugriff.
+grant select, insert, update, delete on table
+  public.erp_meta,
+  public.company_settings,
+  public.customers,
+  public.delivery_addresses,
+  public.orders,
+  public.order_items,
+  public.invoices,
+  public.invoice_items,
+  public.document_counters
+to authenticated;
+
+revoke all on table
+  public.erp_meta,
+  public.company_settings,
+  public.customers,
+  public.delivery_addresses,
+  public.orders,
+  public.order_items,
+  public.invoices,
+  public.invoice_items,
+  public.document_counters
+from anon;
+
 create or replace function public.next_document_number(p_prefix text, p_date date)
 returns text language plpgsql security invoker set search_path=public as $$
 declare n integer;
