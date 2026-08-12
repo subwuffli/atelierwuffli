@@ -1,6 +1,6 @@
 # Atelier Wuffli ERP
 
-Aktuelle Version: **V0.0.15**
+Aktuelle Version: **V0.0.17**
 
 Bei jeder veröffentlichten Änderung wird die letzte Versionsstelle um eins erhöht (`V0.0.2`, `V0.0.3`, …). Die Version wird in der Seitenleiste oberhalb von **Sperren** angezeigt.
 
@@ -10,6 +10,8 @@ Bezahlte Rechnungen können als nummerierte Quittung (`QU-JJ-MM-TT-XXX`) ausgege
 Erstellte Quittungen werden im eigenen Navigationsbereich **Quittungen** gesammelt. Offene Rechnungen werden nach Überschreiten des Fälligkeitsdatums rot als **Überfällig** hervorgehoben.
 Die Rechnungsfälligkeit wird aus dem Abhol-/Lieferdatum plus Zahlungsfrist berechnet und bei einer Änderung des Auftrags automatisch aktualisiert.
 Bereits erstellte Quittungen werden bei späteren Änderungen an Rechnung oder Auftrag automatisch inhaltlich aktualisiert; Quittungsnummer und Datum bleiben erhalten.
+Ausgaben werden mit Datum, Betrag und Beschreibung erfasst und monatlich ausgewertet. Einnahmen entstehen automatisch aus bezahlten Rechnungen. Beide Bereiche bieten Monatsberichte als PDF und ein Balkendiagramm der letzten zwölf Monate.
+Rechnungs- und Quittungs-PDFs verwenden ein neues florales Rosé-Design mit feinem Rahmen, Belegübersicht, hervorgehobener Summe und Dankesbereich.
 
 ## Supabase einmalig einrichten
 
@@ -20,6 +22,7 @@ Bereits erstellte Quittungen werden bei späteren Änderungen an Rechnung oder A
 5. Danach die GitHub-Pages-Anwendung neu laden und anmelden.
 
 Bei einem bestehenden Datenbestand für V0.0.12 einmalig `supabase/hotfix-quittungen.sql` im SQL Editor ausführen.
+Für die Finanzbereiche ab V0.0.16 einmalig die aktualisierte `supabase/migration.sql` erneut vollständig ausführen; die Migration ist wiederholbar und erhält bestehende Daten.
 
 Falls bereits Daten in der früheren Tabelle `erp_data` liegen, übernimmt die Migration sie beim ersten Lauf automatisch in die neuen Tabellen. Die alte Tabelle wird vorsichtshalber nicht gelöscht.
 
