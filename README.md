@@ -1,6 +1,6 @@
 # Atelier Wuffli ERP
 
-Aktuelle Version: **V0.0.17**
+Aktuelle Version: **V0.0.18**
 
 Bei jeder veröffentlichten Änderung wird die letzte Versionsstelle um eins erhöht (`V0.0.2`, `V0.0.3`, …). Die Version wird in der Seitenleiste oberhalb von **Sperren** angezeigt.
 
@@ -11,7 +11,7 @@ Erstellte Quittungen werden im eigenen Navigationsbereich **Quittungen** gesamme
 Die Rechnungsfälligkeit wird aus dem Abhol-/Lieferdatum plus Zahlungsfrist berechnet und bei einer Änderung des Auftrags automatisch aktualisiert.
 Bereits erstellte Quittungen werden bei späteren Änderungen an Rechnung oder Auftrag automatisch inhaltlich aktualisiert; Quittungsnummer und Datum bleiben erhalten.
 Ausgaben werden mit Datum, Betrag und Beschreibung erfasst und monatlich ausgewertet. Einnahmen entstehen automatisch aus bezahlten Rechnungen. Beide Bereiche bieten Monatsberichte als PDF und ein Balkendiagramm der letzten zwölf Monate.
-Rechnungs- und Quittungs-PDFs verwenden ein neues florales Rosé-Design mit feinem Rahmen, Belegübersicht, hervorgehobener Summe und Dankesbereich.
+Rechnungs- und Quittungs-PDFs verwenden ein ruhiges Rosé-Design mit feinem Rahmen, Belegübersicht, hervorgehobener Summe und Dankesbereich.
 
 ## Supabase einmalig einrichten
 
