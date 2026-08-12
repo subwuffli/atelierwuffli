@@ -336,6 +336,27 @@ orderForm=async function(id){
     try{state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO}catch(error){alert(`Aktuelle Auftragsdaten konnten nicht geladen werden: ${error.message}`);return}
   }
   originalOrderForm(id);
+  const form=$('#order-form');
+  if(id&&form){
+    const originalSubmit=form.onsubmit;
+    form.onsubmit=async event=>{
+      const cloudSave=save;save=async()=>{};
+      try{await originalSubmit(event);const order=state.orders.find(x=>x.id===id);syncInvoiceFromOrder(order);await cloudSave();notice(order?.invoiceId?'Auftrag und verknüpfte Rechnung aktualisiert.':'Auftrag gespeichert.')}finally{save=cloudSave}
+    };
+  }
+  if(form){
+    const deliveryField=$('#delivery-field');
+    deliveryField?.insertAdjacentHTML('beforeend','<button type="button" id="new-delivery-inline" class="text-button">Neue Lieferadresse ergänzen</button>');
+    $('#new-delivery-inline').onclick=()=>{
+      const customer=state.customers.find(x=>x.id===form.customerId.value);if(!customer)return;
+      const label=prompt('Bezeichnung der Lieferadresse (z. B. Geschäft):');if(label===null)return;
+      const street=prompt('Strasse und Hausnummer:');if(street===null)return;
+      const city=prompt('PLZ und Ort:');if(city===null)return;
+      customer.deliveries||=[];customer.deliveries.push({id:uid(),label:label.trim(),street:street.trim(),city:city.trim()});
+      form.fulfilment.value='Lieferung';form.fulfilment.dispatchEvent(new Event('change'));form.deliveryIndex.value=String(customer.deliveries.length-1);
+      notice('Lieferadresse ergänzt. Sie wird zusammen mit dem Auftrag gespeichert.');
+    };
+  }
 };
 const originalInvoiceForm=invoiceForm;
 invoiceForm=async function(id){
@@ -349,6 +370,22 @@ invoiceForm=async function(id){
     }
   }
   originalInvoiceForm(id);
+};
+function syncInvoiceFromOrder(order){
+  if(!order?.invoiceId)return;
+  const invoice=state.invoices.find(x=>x.id===order.invoiceId);if(!invoice)return;
+  Object.assign(invoice,{orderId:order.id,orderNumber:order.number,customerId:order.customerId,customerSnapshot:structuredClone(order.customerSnapshot),items:structuredClone(order.items),total:order.total,updatedAt:new Date().toISOString()});
+}
+
+const originalPrintDocument=printDocument;
+printDocument=function(type,id){
+  const standalone=window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;
+  if(!standalone){originalPrintDocument(type,id);return}
+  const d=type==='order'?state.orders.find(x=>x.id===id):state.invoices.find(x=>x.id===id);if(!d)return;
+  const s=state.settings,isInv=type==='invoice',rows=d.items.map(x=>`<tr><td>${esc(x.description)}</td><td>${x.quantity}</td><td>${money(x.price)}</td><td>${money(x.total)}</td></tr>`).join('');
+  const fulfil=!isInv?`<p><strong>${esc(d.fulfilment)}</strong> am ${date(d.fulfilmentDate)}</p>`:'';
+  const overlay=document.createElement('div');overlay.id='mobile-print-view';overlay.className='mobile-print-view';overlay.innerHTML=`<div class="print-controls"><button class="secondary" id="close-print">Zurück zur App</button><button class="primary" id="start-print">Drucken / als PDF speichern</button></div><div class="print-sheet"><header><div>${s.logo?`<img src="${s.logo}">`:''}<p><strong>${esc(s.name)}</strong><br>${docAddress(s.address)}</p></div><div><strong>${esc(d.customerSnapshot.name)}</strong><br>${esc(d.customerSnapshot.billing.street||'')}<br>${esc([d.customerSnapshot.billing.zip,d.customerSnapshot.billing.city].filter(Boolean).join(' '))}</div></header><h1>${isInv?'Rechnung':'Auftrag'} ${esc(d.number)}</h1><p>Datum: ${date(d.date)}</p>${fulfil}<table><thead><tr><th>Beschreibung</th><th>Menge</th><th>Einzelpreis</th><th>Betrag</th></tr></thead><tbody>${rows}</tbody></table><p class="total">Gesamtbetrag: ${money(d.total)}</p><div class="footer">${docAddress(d.text)}${isInv?`<p>Zahlbar bis ${date(d.dueDate)}<br>IBAN: ${esc(s.iban)}<br>Referenz: ${esc(d.number)}</p>`:''}</div></div>`;
+  document.body.appendChild(overlay);$('#close-print').onclick=()=>overlay.remove();$('#start-print').onclick=()=>window.print();
 };
 renderCustomers=renderCloudCustomers;
 Object.assign(window,{customerForm,orderForm,invoiceForm,createInvoice,printDocument,toggleArchive,exportData,closeModal,resetEverything,reloadCloudData});

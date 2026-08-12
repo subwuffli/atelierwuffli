@@ -2,7 +2,7 @@
 
 Stand: 12. August 2026
 
-Aktuelle App-Version: `V0.0.6`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
+Aktuelle App-Version: `V0.0.7`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
 
 > Architekturänderung: Supabase ist nun die einzige Datenquelle. Die früher dokumentierte lokale IndexedDB-Speicherung ist nicht mehr aktuell.
 
@@ -15,6 +15,8 @@ V0.0.4: Bearbeitungssperre zusätzlich für bestehende Aufträge und Rechnungen 
 V0.0.5: Schaltfläche **Neu laden** in der Seitenleiste lädt den aktuellen Supabase-Datenstand ohne Abmeldung.
 
 V0.0.6: **Neu laden** aktualisiert die gesamte Browserseite und gibt vorher eine aktive Bearbeitungssperre frei.
+
+V0.0.7: Auftragsänderungen aktualisieren verknüpfte Rechnungen; Lieferadressen lassen sich direkt im Auftrag ergänzen; installierte mobile Web-Apps verwenden eine interne Druckansicht mit Rückkehr zur App.
 
 ## Veröffentlichung
 
