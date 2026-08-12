@@ -20,6 +20,22 @@ const address=c=>[c?.street,c?.zip&&c?.city?`${c.zip} ${c.city}`:c?.zip||c?.city
 function openDB(){return new Promise((resolve,reject)=>{const r=indexedDB.open(DB_NAME,DB_VERSION);r.onupgradeneeded=()=>r.result.createObjectStore(STORE);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
 async function dbGet(){const db=await openDB();return new Promise((resolve,reject)=>{const r=db.transaction(STORE).objectStore(STORE).get('app');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
 async function save(){const db=await openDB();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(state,'app');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}
+
+async function saveToSupabase(){
+  const { error } = await supabaseClient
+    .from('erp_data')
+    .upsert({
+      id: 'main',
+      data: state,
+      updated_at: new Date().toISOString()
+    });
+
+  if(error){
+    console.error('Supabase speichern fehlgeschlagen:', error);
+    throw error;
+  }
+}
+
 async function clearDB(){const db=await openDB();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).clear();tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}
 async function digest(password,salt){const bytes=new TextEncoder().encode(`${salt}:${password}`);const hash=await crypto.subtle.digest('SHA-256',bytes);return [...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,'0')).join('')}
 function notice(msg){const n=$('#notice');n.textContent=msg;n.classList.remove('hidden');setTimeout(()=>n.classList.add('hidden'),3500)}
