@@ -30,7 +30,28 @@ function fields(obj,names){return names.map(([key,label,type='text',span=false,e
 function activeCustomers(){return state.customers.filter(c=>!c.archived)}
 function nextNumber(prefix,d=today()){const short=d.slice(2).replaceAll('-','-');const key=`${prefix}-${d}`;state.counters[key]=(state.counters[key]||0)+1;return `${prefix}-${short}-${String(state.counters[key]).padStart(3,'0')}`}
 
-async function init(){state=await dbGet()||blankState();state.settings.logo||=DEFAULT_LOGO;if(!state.auth)showLock(true);else showLock(false);bindGlobal()}
+
+async function init(){
+  const { data, error } = await supabaseClient
+    .from('erp_data')
+    .select('id')
+    .eq('id','main');
+
+  if(error){
+    console.error('Supabase-Verbindung fehlgeschlagen:', error);
+    alert('Supabase-Verbindung fehlgeschlagen: ' + error.message);
+  }else{
+    console.log('Supabase-Verbindung erfolgreich:', data);
+  }
+
+  state=await dbGet()||blankState();
+  state.settings.logo||=DEFAULT_LOGO;
+  if(!state.auth)showLock(true);
+  else showLock(false);
+  bindGlobal();
+}
+
+
 function showLock(setup){$('#app').classList.add('hidden');$('#lock-screen').classList.remove('hidden');$('#lock-title').textContent=setup?'ERP einrichten':'ERP entsperren';$('#lock-help').textContent=setup?'Lege ein lokales Passwort mit mindestens 6 Zeichen fest.':'Gib dein lokales Passwort ein.';$('#reset-link').classList.toggle('hidden',setup);$('#password').value='';$('#password').focus()}
 function unlockApp(){sessionStorage.setItem('aw-unlocked','1');$('#lock-screen').classList.add('hidden');$('#app').classList.remove('hidden');render('dashboard')}
 function bindGlobal(){
