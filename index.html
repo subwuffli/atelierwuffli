@@ -41,7 +41,7 @@
         <button data-view="settings">Einstellungen</button>
       </nav>
       <button id="reload-button" class="secondary reload-button">Neu laden</button>
-      <div id="app-version" class="app-version" aria-label="App-Version">V0.0.8</div>
+      <div id="app-version" class="app-version" aria-label="App-Version">V0.0.9</div>
       <button id="lock-button" class="secondary">Sperren</button>
     </aside>
     <main>
@@ -54,6 +54,7 @@
   <dialog id="modal"><div class="modal-shell"><header><h2 id="modal-title"></h2><button type="button" onclick="closeModal()" aria-label="Schliessen">×</button></header><div id="modal-body"></div></div></dialog>
   <input id="import-file" type="file" accept="application/json,.json" hidden>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
