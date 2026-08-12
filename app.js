@@ -274,17 +274,17 @@ async function importCloudData(e){
 
 async function acquireEditLock(type,id){
   await releaseCurrentEditLock();
-  const {data,error}=await supabaseClient.rpc('acquire_edit_lock',{p_entity_type:type,p_entity_id:id,p_session_token:EDIT_SESSION_TOKEN});
+  const {data,error}=await supabaseClient.rpc('acquire_edit_lock_v2',{p_entity_type:type,p_entity_id:id,p_session_token:EDIT_SESSION_TOKEN});
   if(error)throw error;if(!data)return false;
   activeEditLock={type,id};
-  lockHeartbeat=setInterval(async()=>{if(activeEditLock)await supabaseClient.rpc('acquire_edit_lock',{p_entity_type:activeEditLock.type,p_entity_id:activeEditLock.id,p_session_token:EDIT_SESSION_TOKEN})},60000);
+  lockHeartbeat=setInterval(async()=>{if(activeEditLock)await supabaseClient.rpc('acquire_edit_lock_v2',{p_entity_type:activeEditLock.type,p_entity_id:activeEditLock.id,p_session_token:EDIT_SESSION_TOKEN})},60000);
   return true;
 }
 
 async function releaseCurrentEditLock(){
   if(lockHeartbeat){clearInterval(lockHeartbeat);lockHeartbeat=null}
   const lock=activeEditLock;activeEditLock=null;if(!lock)return;
-  const {error}=await supabaseClient.rpc('release_edit_lock',{p_entity_type:lock.type,p_entity_id:lock.id,p_session_token:EDIT_SESSION_TOKEN});
+  const {error}=await supabaseClient.rpc('release_edit_lock_v2',{p_entity_type:lock.type,p_entity_id:lock.id,p_session_token:EDIT_SESSION_TOKEN});
   if(error)console.error('Bearbeitungssperre konnte nicht freigegeben werden:',error);
 }
 
@@ -310,7 +310,7 @@ customerForm=async function(id){
       state.settings.logo||=DEFAULT_LOGO;
     }catch(error){
       console.error('Bearbeitungssperre nicht verfügbar:',error);
-      notice(`Bearbeitungssperre nicht verfügbar: ${error?.message||'Unbekannter Fehler'}. Die Änderung wird beim Speichern auf Konflikte geprüft.`);
+      alert(`Bearbeitungssperre nicht verfügbar: ${error?.message||'Unbekannter Fehler'}. Die Bearbeitung bleibt möglich; beim Speichern wird auf Konflikte geprüft.`);
     }
   }else{
     try{state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO}catch(error){alert(`Aktuelle Kundendaten konnten nicht geladen werden: ${error.message}`);return}

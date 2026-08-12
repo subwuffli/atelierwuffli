@@ -21,7 +21,7 @@ revoke all on public.edit_locks from anon;
 drop function if exists public.acquire_edit_lock(text,uuid);
 drop function if exists public.release_edit_lock(text,uuid);
 
-create or replace function public.acquire_edit_lock(p_entity_type text, p_entity_id uuid, p_session_token uuid)
+create or replace function public.acquire_edit_lock_v2(p_entity_type text, p_entity_id uuid, p_session_token uuid)
 returns boolean language plpgsql security invoker set search_path=public as $$
 declare acquired boolean;
 begin
@@ -35,10 +35,10 @@ begin
   return acquired;
 end $$;
 
-create or replace function public.release_edit_lock(p_entity_type text, p_entity_id uuid, p_session_token uuid)
+create or replace function public.release_edit_lock_v2(p_entity_type text, p_entity_id uuid, p_session_token uuid)
 returns void language sql security invoker set search_path=public as $$
   delete from edit_locks where entity_type=p_entity_type and entity_id=p_entity_id and user_id=auth.uid() and session_token=p_session_token;
 $$;
-grant execute on function public.acquire_edit_lock(text,uuid,uuid) to authenticated;
-grant execute on function public.release_edit_lock(text,uuid,uuid) to authenticated;
+grant execute on function public.acquire_edit_lock_v2(text,uuid,uuid) to authenticated;
+grant execute on function public.release_edit_lock_v2(text,uuid,uuid) to authenticated;
 notify pgrst, 'reload schema';
