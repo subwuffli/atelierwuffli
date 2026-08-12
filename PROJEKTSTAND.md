@@ -2,7 +2,7 @@
 
 Stand: 12. August 2026
 
-Aktuelle App-Version: `V0.0.9`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
+Aktuelle App-Version: `V0.0.10`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
 
 > Architekturänderung: Supabase ist nun die einzige Datenquelle. Die früher dokumentierte lokale IndexedDB-Speicherung ist nicht mehr aktuell.
 
@@ -21,6 +21,8 @@ V0.0.7: Auftragsänderungen aktualisieren verknüpfte Rechnungen; Lieferadressen
 V0.0.8: Sortieroptionen für alle sichtbaren Auftrags- und Rechnungsfelder außer Betrag ergänzt.
 
 V0.0.9: PDF und Drucken getrennt. PDF öffnet am PC einen Browser-Tab und wird in der installierten mobilen Web-App heruntergeladen.
+
+V0.0.10: In der installierten mobilen Web-App wird nur die PDF-Funktion angeboten; Drucken bleibt im normalen Browser und am PC verfügbar.
 
 ## Veröffentlichung
 

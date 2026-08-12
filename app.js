@@ -3,6 +3,7 @@ const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://johkbmlozygtfjsqfkdu.supabase.co';
 const SUPABASE_KEY='sb_publishable_DGpxSu1ppS0fY7nbE75RSg_rI7G8UAb';
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
 let state,currentView='dashboard',realtimeChannel=null,remoteRevision=0,isSaving=false,customerSort='number-asc',orderSort='number-desc',invoiceSort='number-desc',activeEditLock=null,lockHeartbeat=null;
 const EDIT_SESSION_TOKEN=crypto.randomUUID();
 const blankState=()=>({version:2,revision:0,settings:{name:'',address:'',iban:'',paymentDays:30,logo:'',orderText:'',invoiceText:''},customers:[],orders:[],invoices:[],lastExport:null});
