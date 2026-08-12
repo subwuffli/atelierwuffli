@@ -72,6 +72,14 @@ create table if not exists public.document_counters (
   primary key(prefix, counter_date)
 );
 
+create table if not exists public.edit_locks (
+  entity_type text not null,
+  entity_id uuid not null,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  expires_at timestamptz not null,
+  primary key(entity_type, entity_id)
+);
+
 alter table public.erp_meta enable row level security;
 alter table public.company_settings enable row level security;
 alter table public.customers enable row level security;
@@ -81,9 +89,10 @@ alter table public.order_items enable row level security;
 alter table public.invoices enable row level security;
 alter table public.invoice_items enable row level security;
 alter table public.document_counters enable row level security;
+alter table public.edit_locks enable row level security;
 
 do $$ declare t text; begin
-  foreach t in array array['erp_meta','company_settings','customers','delivery_addresses','orders','order_items','invoices','invoice_items','document_counters'] loop
+  foreach t in array array['erp_meta','company_settings','customers','delivery_addresses','orders','order_items','invoices','invoice_items','document_counters','edit_locks'] loop
     execute format('drop policy if exists authenticated_all on public.%I', t);
     execute format('create policy authenticated_all on public.%I for all to authenticated using (true) with check (true)', t);
   end loop;
@@ -101,6 +110,7 @@ grant select, insert, update, delete on table
   public.invoices,
   public.invoice_items,
   public.document_counters
+  ,public.edit_locks
 to authenticated;
 
 revoke all on table
@@ -113,6 +123,7 @@ revoke all on table
   public.invoices,
   public.invoice_items,
   public.document_counters
+  ,public.edit_locks
 from anon;
 
 create or replace function public.next_document_number(p_prefix text, p_date date)
@@ -188,6 +199,28 @@ grant execute on function public.next_document_number(text,date) to authenticate
 grant execute on function public.next_customer_number() to authenticated;
 grant execute on function public.export_erp_backup() to authenticated;
 grant execute on function public.replace_erp_backup(jsonb,bigint) to authenticated;
+
+create or replace function public.acquire_edit_lock(p_entity_type text, p_entity_id uuid)
+returns boolean language plpgsql security invoker set search_path=public as $$
+declare acquired boolean;
+begin
+  delete from edit_locks where expires_at < now();
+  insert into edit_locks(entity_type,entity_id,user_id,expires_at)
+  values(p_entity_type,p_entity_id,auth.uid(),now()+interval '15 minutes')
+  on conflict(entity_type,entity_id) do update
+    set user_id=excluded.user_id,expires_at=excluded.expires_at
+    where edit_locks.user_id=auth.uid() or edit_locks.expires_at<now()
+  returning true into acquired;
+  return coalesce(acquired,false);
+end $$;
+
+create or replace function public.release_edit_lock(p_entity_type text, p_entity_id uuid)
+returns void language sql security invoker set search_path=public as $$
+  delete from edit_locks where entity_type=p_entity_type and entity_id=p_entity_id and user_id=auth.uid();
+$$;
+
+grant execute on function public.acquire_edit_lock(text,uuid) to authenticated;
+grant execute on function public.release_edit_lock(text,uuid) to authenticated;
 
 -- Realtime nur für die kleine Revisionszeile aktivieren. Clients laden bei
 -- einer Änderung den aktuellen relationalen Datenstand neu.

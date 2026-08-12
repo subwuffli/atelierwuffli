@@ -6,6 +6,8 @@ Stand: 12. August 2026
 
 Ergänzt am 12. August 2026: automatische Geräteaktualisierung über Supabase Realtime sowie Kundensortierung nach Nummer oder Name.
 
+Ergänzt: geräteübergreifende Bearbeitungssperre pro Kunde und automatische Reparatur früherer Import-Kodierungsfehler bei deutschen Umlauten.
+
 ## Veröffentlichung
 
 - Repository: https://github.com/subwuffli/atelierwuffli

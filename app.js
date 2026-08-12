@@ -3,7 +3,7 @@ const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://johkbmlozygtfjsqfkdu.supabase.co';
 const SUPABASE_KEY='sb_publishable_DGpxSu1ppS0fY7nbE75RSg_rI7G8UAb';
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let state,currentView='dashboard',realtimeChannel=null,remoteRevision=0,isSaving=false,customerSort='number-asc';
+let state,currentView='dashboard',realtimeChannel=null,remoteRevision=0,isSaving=false,customerSort='number-asc',activeEditLock=null,lockHeartbeat=null;
 const blankState=()=>({version:2,revision:0,settings:{name:'',address:'',iban:'',paymentDays:30,logo:'',orderText:'',invoiceText:''},customers:[],orders:[],invoices:[],lastExport:null});
 const uid=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`;
 const today=()=>new Date().toISOString().slice(0,10);
@@ -60,7 +60,7 @@ async function save(){
 function notice(msg){const n=$('#notice');n.textContent=msg;n.classList.remove('hidden');setTimeout(()=>n.classList.add('hidden'),3500)}
 function setTitle(t){$('#page-title').textContent=t}
 function modal(title,html){$('#modal-title').textContent=title;$('#modal-body').innerHTML=html;$('#modal').showModal()}
-async function closeModal(){if($('#modal').open)$('#modal').close();if(remoteRevision>state.revision&&!isSaving)await reloadCloudData()}
+async function closeModal(){await releaseCurrentEditLock();if($('#modal').open)$('#modal').close();if(remoteRevision>state.revision&&!isSaving)await reloadCloudData()}
 function fields(obj,names){return names.map(([key,label,type='text',span=false,extra=''])=>`<label class="${span?'span-2':''}">${label}<input name="${key}" type="${type}" value="${esc(obj?.[key]||'')}" ${extra}></label>`).join('')}
 function activeCustomers(){return state.customers.filter(c=>!c.archived)}
 async function nextNumber(prefix,d=today()){const {data,error}=await supabaseClient.rpc('next_document_number',{p_prefix:prefix,p_date:d});if(error)throw error;return data}
@@ -90,6 +90,7 @@ async function init(){
 async function loadStateAfterLogin(){
   state=await loadFromSupabase();
   state.settings.logo||=DEFAULT_LOGO;
+  if(repairEncoding(state)>0){await save();notice('Fehlerhafte Umlaute aus einem früheren Import wurden repariert.')}
 }
 
 function showLock(){
@@ -135,6 +136,7 @@ function bindGlobal(){
   });
 
   $('#lock-button').onclick=async()=>{
+    await releaseCurrentEditLock();
     if(realtimeChannel){await supabaseClient.removeChannel(realtimeChannel);realtimeChannel=null}
     await supabaseClient.auth.signOut();
     state=blankState();
@@ -150,6 +152,7 @@ function bindGlobal(){
 
   $('#quick-export').onclick=exportData;
   $('#import-file').onchange=importCloudData;
+  $('#modal').addEventListener('close',()=>releaseCurrentEditLock());
 }
 
 
@@ -263,11 +266,44 @@ async function importCloudData(e){
     if(![1,2].includes(Number(data.version))||!Array.isArray(data.customers)||!Array.isArray(data.orders)||!Array.isArray(data.invoices)||!data.settings)throw new Error('Ungültiges Backup-Format');
     if(!confirm(`Import enthält ${data.customers.length} Kunden, ${data.orders.length} Aufträge und ${data.invoices.length} Rechnungen. Der gesamte aktuelle Supabase-Datenbestand wird ersetzt. Fortfahren?`))return;
     const currentRevision=state.revision;
-    state=normalizeState(data);state.revision=currentRevision;
+    repairEncoding(data);state=normalizeState(data);state.revision=currentRevision;
     await save();render(currentView);notice('Backup vollständig nach Supabase importiert.');
   }catch(error){console.error(error);alert(`Import fehlgeschlagen: ${error.message}`)}
 }
 
+async function acquireEditLock(type,id){
+  await releaseCurrentEditLock();
+  const {data,error}=await supabaseClient.rpc('acquire_edit_lock',{p_entity_type:type,p_entity_id:id});
+  if(error)throw error;if(!data)return false;
+  activeEditLock={type,id};
+  lockHeartbeat=setInterval(async()=>{if(activeEditLock)await supabaseClient.rpc('acquire_edit_lock',{p_entity_type:activeEditLock.type,p_entity_id:activeEditLock.id})},60000);
+  return true;
+}
+
+async function releaseCurrentEditLock(){
+  if(lockHeartbeat){clearInterval(lockHeartbeat);lockHeartbeat=null}
+  const lock=activeEditLock;activeEditLock=null;if(!lock)return;
+  const {error}=await supabaseClient.rpc('release_edit_lock',{p_entity_type:lock.type,p_entity_id:lock.id});
+  if(error)console.error('Bearbeitungssperre konnte nicht freigegeben werden:',error);
+}
+
+function repairEncoding(value){
+  const replacements={'Ã¤':'ä','Ã¶':'ö','Ã¼':'ü','Ã„':'Ä','Ã–':'Ö','Ãœ':'Ü','ÃŸ':'ß','Â ':' ','Â':'' ,'â€“':'–','â€”':'—','â€ž':'„','â€œ':'“','â€™':'’','â€˜':'‘','â€¦':'…','â‚¬':'€'};
+  let changes=0;
+  const walk=input=>{
+    if(typeof input==='string'){let output=input;for(const [wrong,right] of Object.entries(replacements))output=output.split(wrong).join(right);if(output!==input)changes++;return output}
+    if(Array.isArray(input)){for(let i=0;i<input.length;i++)input[i]=walk(input[i]);return input}
+    if(input&&typeof input==='object'){for(const key of Object.keys(input))input[key]=walk(input[key]);return input}
+    return input;
+  };
+  walk(value);return changes;
+}
+
+const originalCustomerForm=customerForm;
+customerForm=async function(id){
+  if(id&&!(await acquireEditLock('customer',id))){alert('Dieser Kunde wird gerade auf einem anderen Gerät bearbeitet. Bitte versuche es später erneut.');return}
+  originalCustomerForm(id);
+};
 renderCustomers=renderCloudCustomers;
 Object.assign(window,{customerForm,orderForm,invoiceForm,createInvoice,printDocument,toggleArchive,exportData,closeModal,resetEverything,reloadCloudData});
 init().catch(err=>{console.error(err);alert(`Supabase konnte nicht geladen werden. ${err?.message||'Bitte Internetverbindung und Datenbankeinrichtung prüfen.'}`)});
