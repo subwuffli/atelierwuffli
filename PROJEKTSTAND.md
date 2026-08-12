@@ -2,7 +2,7 @@
 
 Stand: 12. August 2026
 
-Aktuelle App-Version: `V0.0.1`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
+Aktuelle App-Version: `V0.0.2`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
 
 > Architekturänderung: Supabase ist nun die einzige Datenquelle. Die früher dokumentierte lokale IndexedDB-Speicherung ist nicht mehr aktuell.
 

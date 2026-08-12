@@ -25,13 +25,14 @@ create or replace function public.acquire_edit_lock(p_entity_type text, p_entity
 returns boolean language plpgsql security invoker set search_path=public as $$
 declare acquired boolean;
 begin
-  delete from edit_locks where expires_at < now();
+  delete from edit_locks where entity_type=p_entity_type and entity_id=p_entity_id and expires_at<now();
   insert into edit_locks(entity_type,entity_id,user_id,session_token,expires_at)
   values(p_entity_type,p_entity_id,auth.uid(),p_session_token,now()+interval '15 minutes')
-  on conflict(entity_type,entity_id) do update set user_id=excluded.user_id,session_token=excluded.session_token,expires_at=excluded.expires_at
-  where edit_locks.session_token=p_session_token or edit_locks.expires_at<now()
-  returning true into acquired;
-  return coalesce(acquired,false);
+  on conflict(entity_type,entity_id) do nothing;
+  update edit_locks set expires_at=now()+interval '15 minutes'
+  where entity_type=p_entity_type and entity_id=p_entity_id and session_token=p_session_token;
+  select exists(select 1 from edit_locks where entity_type=p_entity_type and entity_id=p_entity_id and session_token=p_session_token) into acquired;
+  return acquired;
 end $$;
 
 create or replace function public.release_edit_lock(p_entity_type text, p_entity_id uuid, p_session_token uuid)
