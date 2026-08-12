@@ -47,7 +47,8 @@ async function save(){
   try{
     await saveToSupabase();
   }catch(error){
-    alert(String(error.message).includes('CONFLICT')?'Ein anderer Benutzer hat die Daten inzwischen geändert. Bitte wiederhole die Änderung.':'Speichern in Supabase fehlgeschlagen. Ohne Internetverbindung können keine Änderungen gespeichert werden.');
+    const details=[error?.message,error?.details,error?.hint,error?.code].filter(Boolean).join(' | ');
+    alert(String(error.message).includes('CONFLICT')?'Ein anderer Benutzer hat die Daten inzwischen geändert. Bitte wiederhole die Änderung.':`Speichern in Supabase fehlgeschlagen: ${details||'Unbekannter Fehler'}`);
     state=await loadFromSupabase();render(currentView);
     throw error;
   }
