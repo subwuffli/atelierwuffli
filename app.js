@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DB_NAME='atelier-wuffli-erp', DB_VERSION=1, STORE='state', DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 let state, currentView='dashboard';
 
-const SUPABASE_URL='https://jhokbmlozygtfjsqfkdu.supabase.co';
+const SUPABASE_URL='https://johkbmlozygtfjsqfkdu.supabase.co';
 const SUPABASE_KEY='sb_publishable_DGpxSu1ppS0fY7nbE75RSg_rI7G8UAb';
 let supabaseClient=null;
 
