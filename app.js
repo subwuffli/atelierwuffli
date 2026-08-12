@@ -4,6 +4,7 @@ const SUPABASE_URL='https://johkbmlozygtfjsqfkdu.supabase.co';
 const SUPABASE_KEY='sb_publishable_DGpxSu1ppS0fY7nbE75RSg_rI7G8UAb';
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let state,currentView='dashboard',realtimeChannel=null,remoteRevision=0,isSaving=false,customerSort='number-asc',activeEditLock=null,lockHeartbeat=null;
+const EDIT_SESSION_TOKEN=crypto.randomUUID();
 const blankState=()=>({version:2,revision:0,settings:{name:'',address:'',iban:'',paymentDays:30,logo:'',orderText:'',invoiceText:''},customers:[],orders:[],invoices:[],lastExport:null});
 const uid=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`;
 const today=()=>new Date().toISOString().slice(0,10);
@@ -273,17 +274,17 @@ async function importCloudData(e){
 
 async function acquireEditLock(type,id){
   await releaseCurrentEditLock();
-  const {data,error}=await supabaseClient.rpc('acquire_edit_lock',{p_entity_type:type,p_entity_id:id});
+  const {data,error}=await supabaseClient.rpc('acquire_edit_lock',{p_entity_type:type,p_entity_id:id,p_session_token:EDIT_SESSION_TOKEN});
   if(error)throw error;if(!data)return false;
   activeEditLock={type,id};
-  lockHeartbeat=setInterval(async()=>{if(activeEditLock)await supabaseClient.rpc('acquire_edit_lock',{p_entity_type:activeEditLock.type,p_entity_id:activeEditLock.id})},60000);
+  lockHeartbeat=setInterval(async()=>{if(activeEditLock)await supabaseClient.rpc('acquire_edit_lock',{p_entity_type:activeEditLock.type,p_entity_id:activeEditLock.id,p_session_token:EDIT_SESSION_TOKEN})},60000);
   return true;
 }
 
 async function releaseCurrentEditLock(){
   if(lockHeartbeat){clearInterval(lockHeartbeat);lockHeartbeat=null}
   const lock=activeEditLock;activeEditLock=null;if(!lock)return;
-  const {error}=await supabaseClient.rpc('release_edit_lock',{p_entity_type:lock.type,p_entity_id:lock.id});
+  const {error}=await supabaseClient.rpc('release_edit_lock',{p_entity_type:lock.type,p_entity_id:lock.id,p_session_token:EDIT_SESSION_TOKEN});
   if(error)console.error('Bearbeitungssperre konnte nicht freigegeben werden:',error);
 }
 
