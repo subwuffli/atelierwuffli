@@ -3,7 +3,7 @@ const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://johkbmlozygtfjsqfkdu.supabase.co';
 const SUPABASE_KEY='sb_publishable_DGpxSu1ppS0fY7nbE75RSg_rI7G8UAb';
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let state,currentView='dashboard',realtimeChannel=null,remoteRevision=0,isSaving=false,customerSort='number-asc',activeEditLock=null,lockHeartbeat=null;
+let state,currentView='dashboard',realtimeChannel=null,remoteRevision=0,isSaving=false,customerSort='number-asc',orderSort='number-desc',invoiceSort='number-desc',activeEditLock=null,lockHeartbeat=null;
 const EDIT_SESSION_TOKEN=crypto.randomUUID();
 const blankState=()=>({version:2,revision:0,settings:{name:'',address:'',iban:'',paymentDays:30,logo:'',orderText:'',invoiceText:''},customers:[],orders:[],invoices:[],lastExport:null});
 const uid=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`;
@@ -162,7 +162,7 @@ function bindGlobal(){
 }
 
 
-function render(view){currentView=view;$$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));$('.sidebar').classList.remove('open');({dashboard:renderDashboard,customers:renderCloudCustomers,orders:renderOrders,invoices:renderInvoices,settings:renderCloudSettings}[view])()}
+function render(view){currentView=view;$$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));$('.sidebar').classList.remove('open');({dashboard:renderDashboard,customers:renderCloudCustomers,orders:renderSortableOrders,invoices:renderSortableInvoices,settings:renderCloudSettings}[view])()}
 
 function renderDashboard(){setTitle('Übersicht');const open=state.invoices.filter(i=>i.status==='Offen'&&!i.archived);$('#content').innerHTML=`<div class="grid stats"><div class="card stat"><span class="muted">Aktive Kunden</span><strong>${activeCustomers().length}</strong></div><div class="card stat"><span class="muted">Aufträge in Arbeit</span><strong>${state.orders.filter(o=>o.status==='In Arbeit'&&!o.archived).length}</strong></div><div class="card stat"><span class="muted">Offene Rechnungen</span><strong>${open.length}</strong></div><div class="card stat"><span class="muted">Offener Betrag</span><strong>${money(open.reduce((s,i)=>s+i.total,0))}</strong></div></div><div class="section-head"><h2>Schnellstart</h2></div><div class="actions"><button class="primary" onclick="customerForm()">Neuer Kunde</button><button class="secondary" onclick="orderForm()">Neuer Auftrag</button><button class="secondary" onclick="exportData()">Sicherung exportieren</button></div><div class="section-head"><h2>Letzte Aufträge</h2></div>${ordersTable(state.orders.filter(o=>!o.archived).slice(-5).reverse())}`}
 
@@ -263,6 +263,29 @@ function renderCloudCustomers(){
   $('#customer-sort').value=customerSort;
   const draw=()=>{$('#customer-table').innerHTML=customersTable(sortedCustomers(state.customers.filter(c=>$('#show-customer-archive').checked?c.archived:!c.archived)))};
   $('#customer-sort').onchange=e=>{customerSort=e.target.value;draw()};$('#show-customer-archive').onchange=draw;draw();
+}
+
+function sortRows(rows,mode,fields){
+  const [field,direction]=mode.split('-'),factor=direction==='desc'?-1:1,getter=fields[field];
+  return [...rows].sort((a,b)=>{const av=getter(a),bv=getter(b);if(typeof av==='number'&&typeof bv==='number')return (av-bv)*factor;return String(av??'').localeCompare(String(bv??''),'de',{numeric:true,sensitivity:'base'})*factor});
+}
+
+function renderSortableOrders(){
+  setTitle('Aufträge');
+  $('#content').innerHTML=`<div class="section-head"><div class="actions"><button class="primary" onclick="orderForm()">Auftrag erfassen</button><label>Sortierung<select id="order-sort"><option value="number-asc">Nummer aufsteigend</option><option value="number-desc">Nummer absteigend</option><option value="customer-asc">Kunde A–Z</option><option value="customer-desc">Kunde Z–A</option><option value="fulfilment-asc">Erfüllungsart A–Z</option><option value="fulfilment-desc">Erfüllungsart Z–A</option><option value="date-asc">Liefer-/Abholdatum aufsteigend</option><option value="date-desc">Liefer-/Abholdatum absteigend</option><option value="status-asc">Status A–Z</option><option value="status-desc">Status Z–A</option></select></label></div><label class="inline"><input id="show-order-archive" type="checkbox"> Archiv anzeigen</label></div><div id="order-table"></div>`;
+  $('#order-sort').value=orderSort;
+  const fields={number:o=>o.number,customer:o=>o.customerSnapshot?.name||'',fulfilment:o=>o.fulfilment,date:o=>o.fulfilmentDate,status:o=>o.status};
+  const draw=()=>{$('#order-table').innerHTML=ordersTable(sortRows(state.orders.filter(o=>$('#show-order-archive').checked?o.archived:!o.archived),orderSort,fields))};
+  $('#order-sort').onchange=e=>{orderSort=e.target.value;draw()};$('#show-order-archive').onchange=draw;draw();
+}
+
+function renderSortableInvoices(){
+  setTitle('Rechnungen');
+  $('#content').innerHTML=`<div class="section-head"><div class="actions"><span class="muted">Rechnungen werden aus Aufträgen erstellt.</span><label>Sortierung<select id="invoice-sort"><option value="number-asc">Nummer aufsteigend</option><option value="number-desc">Nummer absteigend</option><option value="issued-asc">Rechnungsdatum aufsteigend</option><option value="issued-desc">Rechnungsdatum absteigend</option><option value="customer-asc">Kunde A–Z</option><option value="customer-desc">Kunde Z–A</option><option value="due-asc">Fälligkeit aufsteigend</option><option value="due-desc">Fälligkeit absteigend</option><option value="status-asc">Status A–Z</option><option value="status-desc">Status Z–A</option></select></label></div><label class="inline"><input id="show-invoice-archive" type="checkbox"> Archiv anzeigen</label></div><div id="invoice-table"></div>`;
+  $('#invoice-sort').value=invoiceSort;
+  const fields={number:i=>i.number,issued:i=>i.date,customer:i=>i.customerSnapshot?.name||'',due:i=>i.dueDate,status:i=>i.status};
+  const draw=()=>{$('#invoice-table').innerHTML=invoicesTable(sortRows(state.invoices.filter(i=>$('#show-invoice-archive').checked?i.archived:!i.archived),invoiceSort,fields))};
+  $('#invoice-sort').onchange=e=>{invoiceSort=e.target.value;draw()};$('#show-invoice-archive').onchange=draw;draw();
 }
 
 async function importCloudData(e){
@@ -388,5 +411,7 @@ printDocument=function(type,id){
   document.body.appendChild(overlay);$('#close-print').onclick=()=>overlay.remove();$('#start-print').onclick=()=>window.print();
 };
 renderCustomers=renderCloudCustomers;
+renderOrders=renderSortableOrders;
+renderInvoices=renderSortableInvoices;
 Object.assign(window,{customerForm,orderForm,invoiceForm,createInvoice,printDocument,toggleArchive,exportData,closeModal,resetEverything,reloadCloudData});
 init().catch(err=>{console.error(err);alert(`Supabase konnte nicht geladen werden. ${err?.message||'Bitte Internetverbindung und Datenbankeinrichtung prüfen.'}`)});
