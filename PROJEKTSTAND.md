@@ -2,7 +2,7 @@
 
 Stand: 12. August 2026
 
-Aktuelle App-Version: `V0.0.12`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
+Aktuelle App-Version: `V0.0.13`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
 
 > Architekturänderung: Supabase ist nun die einzige Datenquelle. Die früher dokumentierte lokale IndexedDB-Speicherung ist nicht mehr aktuell.
 
@@ -27,6 +27,8 @@ V0.0.10: In der installierten mobilen Web-App wird nur die PDF-Funktion angebote
 V0.0.11: Auch normale Handy-Browser zeigen nur PDF. Listen werden mobil als bildschirmbreite Karten mit Aktionen unter den Informationen dargestellt.
 
 V0.0.12: Bezahlte Rechnungen erhalten auf Wunsch eine unveränderliche Quittung mit Nummer im Format `QU-JJ-MM-TT-XXX`, PDF-Ausgabe und Druckansicht.
+
+V0.0.13: Eigener Navigationsbereich für Quittungen; überfällige offene Rechnungen werden rot hervorgehoben.
 
 ## Veröffentlichung
 

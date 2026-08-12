@@ -1,12 +1,13 @@
 # Atelier Wuffli ERP
 
-Aktuelle Version: **V0.0.12**
+Aktuelle Version: **V0.0.13**
 
 Bei jeder veröffentlichten Änderung wird die letzte Versionsstelle um eins erhöht (`V0.0.2`, `V0.0.3`, …). Die Version wird in der Seitenleiste oberhalb von **Sperren** angezeigt.
 
 Deutschsprachiges Mehrbenutzer-ERP für Kunden, Aufträge, Rechnungen und Quittungen. Die Anwendung wird über GitHub Pages ausgeliefert; Anmeldung und sämtliche Geschäftsdaten liegen in Supabase.
 
 Bezahlte Rechnungen können als nummerierte Quittung (`QU-JJ-MM-TT-XXX`) ausgegeben werden. Quittungen stehen als PDF und Druckansicht zur Verfügung.
+Erstellte Quittungen werden im eigenen Navigationsbereich **Quittungen** gesammelt. Offene Rechnungen werden nach Überschreiten des Fälligkeitsdatums rot als **Überfällig** hervorgehoben.
 
 ## Supabase einmalig einrichten
 
