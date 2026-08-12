@@ -4,6 +4,8 @@ Stand: 12. August 2026
 
 > Architekturänderung: Supabase ist nun die einzige Datenquelle. Die früher dokumentierte lokale IndexedDB-Speicherung ist nicht mehr aktuell.
 
+Ergänzt am 12. August 2026: automatische Geräteaktualisierung über Supabase Realtime sowie Kundensortierung nach Nummer oder Name.
+
 ## Veröffentlichung
 
 - Repository: https://github.com/subwuffli/atelierwuffli

@@ -3,7 +3,7 @@ const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://johkbmlozygtfjsqfkdu.supabase.co';
 const SUPABASE_KEY='sb_publishable_DGpxSu1ppS0fY7nbE75RSg_rI7G8UAb';
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let state,currentView='dashboard';
+let state,currentView='dashboard',realtimeChannel=null,remoteRevision=0,isSaving=false,customerSort='number-asc';
 const blankState=()=>({version:2,revision:0,settings:{name:'',address:'',iban:'',paymentDays:30,logo:'',orderText:'',invoiceText:''},customers:[],orders:[],invoices:[],lastExport:null});
 const uid=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`;
 const today=()=>new Date().toISOString().slice(0,10);
@@ -44,6 +44,7 @@ async function loadFromSupabase(){
 
 async function save(){
   state=normalizeState(state);
+  isSaving=true;
   try{
     await saveToSupabase();
   }catch(error){
@@ -51,12 +52,15 @@ async function save(){
     alert(String(error.message).includes('CONFLICT')?'Ein anderer Benutzer hat die Daten inzwischen geändert. Bitte wiederhole die Änderung.':`Speichern in Supabase fehlgeschlagen: ${details||'Unbekannter Fehler'}`);
     state=await loadFromSupabase();render(currentView);
     throw error;
+  }finally{
+    isSaving=false;
+    if(remoteRevision>state.revision&&!$('#modal').open)await reloadCloudData();
   }
 }
 function notice(msg){const n=$('#notice');n.textContent=msg;n.classList.remove('hidden');setTimeout(()=>n.classList.add('hidden'),3500)}
 function setTitle(t){$('#page-title').textContent=t}
 function modal(title,html){$('#modal-title').textContent=title;$('#modal-body').innerHTML=html;$('#modal').showModal()}
-function closeModal(){if($('#modal').open)$('#modal').close()}
+async function closeModal(){if($('#modal').open)$('#modal').close();if(remoteRevision>state.revision&&!isSaving)await reloadCloudData()}
 function fields(obj,names){return names.map(([key,label,type='text',span=false,extra=''])=>`<label class="${span?'span-2':''}">${label}<input name="${key}" type="${type}" value="${esc(obj?.[key]||'')}" ${extra}></label>`).join('')}
 function activeCustomers(){return state.customers.filter(c=>!c.archived)}
 async function nextNumber(prefix,d=today()){const {data,error}=await supabaseClient.rpc('next_document_number',{p_prefix:prefix,p_date:d});if(error)throw error;return data}
@@ -102,6 +106,7 @@ function showLock(){
 function unlockApp(){
   $('#lock-screen').classList.add('hidden');
   $('#app').classList.remove('hidden');
+  subscribeToCloudChanges();
   render('dashboard');
 }
 
@@ -130,6 +135,7 @@ function bindGlobal(){
   });
 
   $('#lock-button').onclick=async()=>{
+    if(realtimeChannel){await supabaseClient.removeChannel(realtimeChannel);realtimeChannel=null}
     await supabaseClient.auth.signOut();
     state=blankState();
     showLock();
@@ -147,7 +153,7 @@ function bindGlobal(){
 }
 
 
-function render(view){currentView=view;$$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));$('.sidebar').classList.remove('open');({dashboard:renderDashboard,customers:renderCustomers,orders:renderOrders,invoices:renderInvoices,settings:renderCloudSettings}[view])()}
+function render(view){currentView=view;$$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));$('.sidebar').classList.remove('open');({dashboard:renderDashboard,customers:renderCloudCustomers,orders:renderOrders,invoices:renderInvoices,settings:renderCloudSettings}[view])()}
 
 function renderDashboard(){setTitle('Übersicht');const open=state.invoices.filter(i=>i.status==='Offen'&&!i.archived);$('#content').innerHTML=`<div class="grid stats"><div class="card stat"><span class="muted">Aktive Kunden</span><strong>${activeCustomers().length}</strong></div><div class="card stat"><span class="muted">Aufträge in Arbeit</span><strong>${state.orders.filter(o=>o.status==='In Arbeit'&&!o.archived).length}</strong></div><div class="card stat"><span class="muted">Offene Rechnungen</span><strong>${open.length}</strong></div><div class="card stat"><span class="muted">Offener Betrag</span><strong>${money(open.reduce((s,i)=>s+i.total,0))}</strong></div></div><div class="section-head"><h2>Schnellstart</h2></div><div class="actions"><button class="primary" onclick="customerForm()">Neuer Kunde</button><button class="secondary" onclick="orderForm()">Neuer Auftrag</button><button class="secondary" onclick="exportData()">Sicherung exportieren</button></div><div class="section-head"><h2>Letzte Aufträge</h2></div>${ordersTable(state.orders.filter(o=>!o.archived).slice(-5).reverse())}`}
 
@@ -224,6 +230,32 @@ function renderCloudSettings(){
 }
 async function reloadCloudData(){state=await loadFromSupabase();render(currentView);notice('Aktueller Supabase-Datenstand geladen.')}
 
+function subscribeToCloudChanges(){
+  if(realtimeChannel)return;
+  realtimeChannel=supabaseClient.channel('erp-revision').on('postgres_changes',{event:'UPDATE',schema:'public',table:'erp_meta',filter:'id=eq.main'},payload=>{
+    remoteRevision=Number(payload.new?.revision)||0;
+    setTimeout(async()=>{
+      if(remoteRevision<=state.revision)return;
+      if(isSaving||$('#modal').open){notice('Neue Daten von einem anderen Gerät verfügbar. Sie werden nach dem Speichern oder Schliessen geladen.');return}
+      await reloadCloudData();
+    },400);
+  }).subscribe();
+}
+
+function sortedCustomers(rows){
+  const result=[...rows],byName=(a,b)=>customerName(a).localeCompare(customerName(b),'de',{sensitivity:'base'}),byNumber=(a,b)=>(Number(String(a.number).replace(/\D/g,''))||0)-(Number(String(b.number).replace(/\D/g,''))||0);
+  result.sort(customerSort==='name-asc'?byName:customerSort==='name-desc'?(a,b)=>byName(b,a):customerSort==='number-desc'?(a,b)=>byNumber(b,a):byNumber);
+  return result;
+}
+
+function renderCloudCustomers(){
+  setTitle('Kunden');
+  $('#content').innerHTML=`<div class="section-head"><div class="actions"><button class="primary" onclick="customerForm()">Kunde erfassen</button><label>Sortierung<select id="customer-sort"><option value="number-asc">Kundennummer aufsteigend</option><option value="number-desc">Kundennummer absteigend</option><option value="name-asc">Name A–Z</option><option value="name-desc">Name Z–A</option></select></label></div><label class="inline"><input id="show-customer-archive" type="checkbox"> Archiv anzeigen</label></div><div id="customer-table"></div>`;
+  $('#customer-sort').value=customerSort;
+  const draw=()=>{$('#customer-table').innerHTML=customersTable(sortedCustomers(state.customers.filter(c=>$('#show-customer-archive').checked?c.archived:!c.archived)))};
+  $('#customer-sort').onchange=e=>{customerSort=e.target.value;draw()};$('#show-customer-archive').onchange=draw;draw();
+}
+
 async function importCloudData(e){
   const file=e.target.files[0];e.target.value='';if(!file)return;
   try{
@@ -236,5 +268,6 @@ async function importCloudData(e){
   }catch(error){console.error(error);alert(`Import fehlgeschlagen: ${error.message}`)}
 }
 
+renderCustomers=renderCloudCustomers;
 Object.assign(window,{customerForm,orderForm,invoiceForm,createInvoice,printDocument,toggleArchive,exportData,closeModal,resetEverything,reloadCloudData});
 init().catch(err=>{console.error(err);alert(`Supabase konnte nicht geladen werden. ${err?.message||'Bitte Internetverbindung und Datenbankeinrichtung prüfen.'}`)});

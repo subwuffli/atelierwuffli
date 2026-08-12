@@ -21,6 +21,8 @@ Das Schema ist relational aufgebaut. Kunden, Lieferadressen, Aufträge, Position
 - Der Import unterstützt alte Backups der Version 1 sowie neue Backups der Version 2.
 - Dokumentnummern werden atomar in Supabase vergeben, damit mehrere Benutzer keine doppelten Nummern erzeugen.
 - Eine Revisionsprüfung verhindert, dass ein Benutzer unbemerkt Änderungen eines anderen überschreibt.
+- Supabase Realtime meldet Änderungen anderer Geräte; die Anwendung lädt sie automatisch nach, solange kein Formular geöffnet ist.
+- Kunden können nach Kundennummer oder Name auf- und absteigend sortiert werden.
 
 ## Sicherheit
 

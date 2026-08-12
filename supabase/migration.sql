@@ -189,6 +189,13 @@ grant execute on function public.next_customer_number() to authenticated;
 grant execute on function public.export_erp_backup() to authenticated;
 grant execute on function public.replace_erp_backup(jsonb,bigint) to authenticated;
 
+-- Realtime nur für die kleine Revisionszeile aktivieren. Clients laden bei
+-- einer Änderung den aktuellen relationalen Datenstand neu.
+do $$ begin
+  alter publication supabase_realtime add table public.erp_meta;
+exception when duplicate_object then null;
+end $$;
+
 -- Vorhandenen Datenstand aus der früheren JSON-Tabelle einmalig übernehmen.
 do $$ declare legacy jsonb; begin
   if to_regclass('public.erp_data') is not null then
