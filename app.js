@@ -317,6 +317,34 @@ customerForm=async function(id){
   }
   originalCustomerForm(id);
 };
+const originalOrderForm=orderForm;
+orderForm=async function(id){
+  if(id){
+    try{
+      if(!(await acquireEditLock('order',id))){alert('Dieser Auftrag wird gerade auf einem anderen Gerät bearbeitet. Bitte versuche es später erneut.');return}
+      state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO;
+    }catch(error){
+      console.error('Bearbeitungssperre nicht verfügbar:',error);
+      alert(`Bearbeitungssperre nicht verfügbar: ${error?.message||'Unbekannter Fehler'}. Die Bearbeitung bleibt möglich; beim Speichern wird auf Konflikte geprüft.`);
+    }
+  }else{
+    try{state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO}catch(error){alert(`Aktuelle Auftragsdaten konnten nicht geladen werden: ${error.message}`);return}
+  }
+  originalOrderForm(id);
+};
+const originalInvoiceForm=invoiceForm;
+invoiceForm=async function(id){
+  if(id){
+    try{
+      if(!(await acquireEditLock('invoice',id))){alert('Diese Rechnung wird gerade auf einem anderen Gerät bearbeitet. Bitte versuche es später erneut.');return}
+      state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO;
+    }catch(error){
+      console.error('Bearbeitungssperre nicht verfügbar:',error);
+      alert(`Bearbeitungssperre nicht verfügbar: ${error?.message||'Unbekannter Fehler'}. Die Bearbeitung bleibt möglich; beim Speichern wird auf Konflikte geprüft.`);
+    }
+  }
+  originalInvoiceForm(id);
+};
 renderCustomers=renderCloudCustomers;
 Object.assign(window,{customerForm,orderForm,invoiceForm,createInvoice,printDocument,toggleArchive,exportData,closeModal,resetEverything,reloadCloudData});
 init().catch(err=>{console.error(err);alert(`Supabase konnte nicht geladen werden. ${err?.message||'Bitte Internetverbindung und Datenbankeinrichtung prüfen.'}`)});

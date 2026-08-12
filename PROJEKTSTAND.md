@@ -2,13 +2,15 @@
 
 Stand: 12. August 2026
 
-Aktuelle App-Version: `V0.0.3`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
+Aktuelle App-Version: `V0.0.4`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
 
 > Architekturänderung: Supabase ist nun die einzige Datenquelle. Die früher dokumentierte lokale IndexedDB-Speicherung ist nicht mehr aktuell.
 
 Ergänzt am 12. August 2026: automatische Geräteaktualisierung über Supabase Realtime sowie Kundensortierung nach Nummer oder Name.
 
 Ergänzt: geräteübergreifende Bearbeitungssperre pro Kunde und automatische Reparatur früherer Import-Kodierungsfehler bei deutschen Umlauten.
+
+V0.0.4: Bearbeitungssperre zusätzlich für bestehende Aufträge und Rechnungen aktiviert.
 
 ## Veröffentlichung
 

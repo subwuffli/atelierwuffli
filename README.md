@@ -1,6 +1,6 @@
 # Atelier Wuffli ERP
 
-Aktuelle Version: **V0.0.3**
+Aktuelle Version: **V0.0.4**
 
 Bei jeder veröffentlichten Änderung wird die letzte Versionsstelle um eins erhöht (`V0.0.2`, `V0.0.3`, …). Die Version wird in der Seitenleiste oberhalb von **Sperren** angezeigt.
 
@@ -27,7 +27,7 @@ Das Schema ist relational aufgebaut. Kunden, Lieferadressen, Aufträge, Position
 - Eine Revisionsprüfung verhindert, dass ein Benutzer unbemerkt Änderungen eines anderen überschreibt.
 - Supabase Realtime meldet Änderungen anderer Geräte; die Anwendung lädt sie automatisch nach, solange kein Formular geöffnet ist.
 - Kunden können nach Kundennummer oder Name auf- und absteigend sortiert werden.
-- Derselbe Kunde kann nicht gleichzeitig auf zwei Geräten bearbeitet werden. Die Sperre wird beim Schließen freigegeben und läuft bei Verbindungsabbrüchen automatisch aus.
+- Derselbe Kunde, Auftrag oder dieselbe Rechnung kann nicht gleichzeitig auf zwei Geräten bearbeitet werden. Die Sperre wird beim Schließen freigegeben und läuft bei Verbindungsabbrüchen automatisch aus.
 - Typische fehlerhafte UTF-8-Umlaute aus alten Backups werden beim Laden und Import automatisch repariert.
 
 ## Sicherheit
