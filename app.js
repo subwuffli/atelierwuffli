@@ -149,7 +149,50 @@ function renderSettings(){setTitle('Einstellungen');const s=state.settings;$('#c
 
 async function toggleArchive(kind,id){const x=state[kind].find(x=>x.id===id);if(!x)return;if(!x.archived&&kind!=='customers'&&((kind==='orders'&&x.status!=='Abgeschlossen')||(kind==='invoices'&&x.status==='Offen'))){alert('Nur abgeschlossene Aufträge beziehungsweise bezahlte oder stornierte Rechnungen können archiviert werden.');return}x.archived=!x.archived;await save();render(currentView);notice(x.archived?'Archiviert.':'Wieder aktiviert.')}
 async function exportData(){state.lastExport=new Date().toISOString();await save();const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`atelier-wuffli-backup-${today()}.json`;a.click();URL.revokeObjectURL(a.href);if(currentView==='settings')renderSettings();notice('Datensicherung exportiert.')}
-async function importData(e){const f=e.target.files[0];e.target.value='';if(!f)return;try{const data=JSON.parse(await f.text());if(data.version!==1||!Array.isArray(data.customers)||!Array.isArray(data.orders)||!Array.isArray(data.invoices)||!data.settings)throw new Error('Ungültiges Format');if(!confirm(`Import enthält ${data.customers.length} Kunden, ${data.orders.length} Aufträge und ${data.invoices.length} Rechnungen. Alle aktuellen Daten ersetzen?`))return;const auth=state.auth;state=data;state.auth=auth;await save();render(currentView);notice('Daten erfolgreich importiert.')}catch(err){alert(`Import fehlgeschlagen: ${err.message}`)}}
+async function importData(e){
+  const f=e.target.files[0];
+  e.target.value='';
+
+  if(!f)return;
+
+  try{
+    const data=JSON.parse(await f.text());
+
+    if(
+      data.version!==1 ||
+      !Array.isArray(data.customers) ||
+      !Array.isArray(data.orders) ||
+      !Array.isArray(data.invoices) ||
+      !data.settings
+    ){
+      throw new Error('Ungültiges Format');
+    }
+
+    if(!confirm(
+      `Import enthält ${data.customers.length} Kunden, ` +
+      `${data.orders.length} Aufträge und ` +
+      `${data.invoices.length} Rechnungen. ` +
+      `Diese Daten nach Supabase übernehmen?`
+    ))return;
+
+    // Alte lokale Passwortdaten werden nicht mehr benötigt
+    data.auth=null;
+
+    state=data;
+
+    // Lokale Sicherheitskopie behalten
+    await save();
+
+    // Zentral in Supabase speichern
+    await saveToSupabase();
+
+    render(currentView);
+    notice('Backup erfolgreich nach Supabase übertragen.');
+  }catch(err){
+    console.error(err);
+    alert(`Import fehlgeschlagen: ${err.message}`);
+  }
+}
 async function resetEverything(){if(confirm('Alle lokalen Daten löschen?')&&confirm('Dieser Vorgang kann nicht rückgängig gemacht werden. Fortfahren?')){await clearDB();location.reload()}}
 function docAddress(s){return esc(s||'').replaceAll('\n','<br>')}
 function printDocument(type,id){const d=type==='order'?state.orders.find(x=>x.id===id):state.invoices.find(x=>x.id===id);if(!d)return;const s=state.settings,isInv=type==='invoice',items=d.items.map(x=>`<tr><td>${esc(x.description)}</td><td>${x.quantity}</td><td>${money(x.price)}</td><td>${money(x.total)}</td></tr>`).join('');const fulfil=!isInv?`<p><strong>${esc(d.fulfilment)}</strong> am ${date(d.fulfilmentDate)}${d.fulfilment==='Lieferung'&&d.customerSnapshot.delivery?`<br>${esc(d.customerSnapshot.delivery.label)}<br>${esc(d.customerSnapshot.delivery.street)}<br>${esc(d.customerSnapshot.delivery.city)}`:''}</p>`:'';const html=`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${esc(d.number)}</title><style>@page{size:A4;margin:20mm}body{font:12px Arial;color:#222}header{display:flex;justify-content:space-between;min-height:120px}img{max-width:180px;max-height:80px}h1{font-size:24px;margin-top:40px}table{width:100%;border-collapse:collapse;margin-top:30px}th,td{text-align:left;padding:9px;border-bottom:1px solid #ccc}th:last-child,td:last-child{text-align:right}.total{text-align:right;font-size:18px;font-weight:bold;margin-top:20px}.footer{margin-top:45px;line-height:1.6}.muted{color:#666}@media print{button{display:none}}</style></head><body><button onclick="window.print()">Als PDF speichern / Drucken</button><header><div>${s.logo?`<img src="${s.logo}">`:''}<p><strong>${esc(s.name)}</strong><br>${docAddress(s.address)}</p></div><div><strong>${esc(d.customerSnapshot.name)}</strong><br>${esc(d.customerSnapshot.billing.street||'')}<br>${esc([d.customerSnapshot.billing.zip,d.customerSnapshot.billing.city].filter(Boolean).join(' '))}</div></header><h1>${isInv?'Rechnung':'Auftrag'} ${esc(d.number)}</h1><p>Datum: ${date(d.date)}${isInv?`<br>Auftrag: ${esc(d.orderNumber||'–')}`:''}</p>${fulfil}<table><thead><tr><th>Beschreibung</th><th>Menge</th><th>Einzelpreis</th><th>Betrag</th></tr></thead><tbody>${items}</tbody></table><p class="total">Gesamtbetrag: ${money(d.total)}</p><div class="footer">${docAddress(d.text)}${isInv?`<p>Zahlbar bis ${date(d.dueDate)}<br>IBAN: ${esc(s.iban)}<br>Referenz: ${esc(d.number)}</p>`:''}</div><script>setTimeout(()=>window.print(),400)<\/script></body></html>`;const w=window.open('','_blank');if(!w){alert('Bitte Pop-ups für die PDF-Ausgabe erlauben.');return}w.document.write(html);w.document.close()}
