@@ -1,14 +1,10 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const DB_NAME='atelier-wuffli-erp', DB_VERSION=1, STORE='state', DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
-let state, currentView='dashboard';
-
+const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://johkbmlozygtfjsqfkdu.supabase.co';
 const SUPABASE_KEY='sb_publishable_DGpxSu1ppS0fY7nbE75RSg_rI7G8UAb';
-let supabaseClient=null;
-
-supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-const blankState=()=>({version:1,auth:null,settings:{name:'',address:'',iban:'',paymentDays:30,logo:'',orderText:'',invoiceText:''},customers:[],orders:[],invoices:[],counters:{},lastExport:null});
+const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let state,currentView='dashboard';
+const blankState=()=>({version:2,revision:0,settings:{name:'',address:'',iban:'',paymentDays:30,logo:'',orderText:'',invoiceText:''},customers:[],orders:[],invoices:[],lastExport:null});
 const uid=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`;
 const today=()=>new Date().toISOString().slice(0,10);
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -17,40 +13,56 @@ const date=v=>v?new Intl.DateTimeFormat('de-CH').format(new Date(`${v}T12:00:00`
 const customerName=c=>c?(c.company||[c.firstName,c.lastName].filter(Boolean).join(' ')||'Ohne Namen'):'Unbekannt';
 const address=c=>[c?.street,c?.zip&&c?.city?`${c.zip} ${c.city}`:c?.zip||c?.city].filter(Boolean).join(', ');
 
-function openDB(){return new Promise((resolve,reject)=>{const r=indexedDB.open(DB_NAME,DB_VERSION);r.onupgradeneeded=()=>r.result.createObjectStore(STORE);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
-async function dbGet(){const db=await openDB();return new Promise((resolve,reject)=>{const r=db.transaction(STORE).objectStore(STORE).get('app');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
-async function save(){const db=await openDB();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(state,'app');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}
+function normalizeState(data){
+  const base=blankState();
+  const next=data&&typeof data==='object'?data:{};
+  return {
+    ...base,
+    ...next,
+    version:2,
+    revision:Number(next.revision)||0,
+    settings:{...base.settings,...(next.settings||{})},
+    customers:Array.isArray(next.customers)?next.customers:[],
+    orders:Array.isArray(next.orders)?next.orders:[],
+    invoices:Array.isArray(next.invoices)?next.invoices:[]
+  };
+}
 
 async function saveToSupabase(){
-  const { error } = await supabaseClient
-    .from('erp_data')
-    .upsert({
-      id: 'main',
-      data: state,
-      updated_at: new Date().toISOString()
-    });
+  for(const order of state.orders)if(typeof order.number!=='string')order.number=await nextNumber('AF',order.date);
+  for(const invoice of state.invoices)if(typeof invoice.number!=='string')invoice.number=await nextNumber('RE',invoice.date);
+  const {data,error}=await supabaseClient.rpc('replace_erp_backup',{p_data:state,p_expected_revision:state.revision});
+  if(error)throw error;
+  state.revision=Number(data);
+}
 
-  if(error){
-    console.error('Supabase speichern fehlgeschlagen:', error);
+async function loadFromSupabase(){
+  const {data,error}=await supabaseClient.rpc('export_erp_backup');
+  if(error)throw error;
+  return normalizeState(data);
+}
+
+async function save(){
+  state=normalizeState(state);
+  try{
+    await saveToSupabase();
+  }catch(error){
+    alert(String(error.message).includes('CONFLICT')?'Ein anderer Benutzer hat die Daten inzwischen geändert. Bitte wiederhole die Änderung.':'Speichern in Supabase fehlgeschlagen. Ohne Internetverbindung können keine Änderungen gespeichert werden.');
+    state=await loadFromSupabase();render(currentView);
     throw error;
   }
 }
-
-async function clearDB(){const db=await openDB();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).clear();tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}
-async function digest(password,salt){const bytes=new TextEncoder().encode(`${salt}:${password}`);const hash=await crypto.subtle.digest('SHA-256',bytes);return [...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,'0')).join('')}
 function notice(msg){const n=$('#notice');n.textContent=msg;n.classList.remove('hidden');setTimeout(()=>n.classList.add('hidden'),3500)}
 function setTitle(t){$('#page-title').textContent=t}
 function modal(title,html){$('#modal-title').textContent=title;$('#modal-body').innerHTML=html;$('#modal').showModal()}
 function closeModal(){if($('#modal').open)$('#modal').close()}
 function fields(obj,names){return names.map(([key,label,type='text',span=false,extra=''])=>`<label class="${span?'span-2':''}">${label}<input name="${key}" type="${type}" value="${esc(obj?.[key]||'')}" ${extra}></label>`).join('')}
 function activeCustomers(){return state.customers.filter(c=>!c.archived)}
-function nextNumber(prefix,d=today()){const short=d.slice(2).replaceAll('-','-');const key=`${prefix}-${d}`;state.counters[key]=(state.counters[key]||0)+1;return `${prefix}-${short}-${String(state.counters[key]).padStart(3,'0')}`}
+async function nextNumber(prefix,d=today()){const {data,error}=await supabaseClient.rpc('next_document_number',{p_prefix:prefix,p_date:d});if(error)throw error;return data}
+async function nextCustomerNumber(){const {data,error}=await supabaseClient.rpc('next_customer_number');if(error)throw error;return data}
 
 
 async function init(){
-  state=await dbGet()||blankState();
-  state.settings.logo||=DEFAULT_LOGO;
-
   bindGlobal();
 
   const { data: { session }, error } = await supabaseClient.auth.getSession();
@@ -62,10 +74,17 @@ async function init(){
   }
 
   if(session){
+    await loadStateAfterLogin();
     unlockApp();
   }else{
+    state=blankState();
     showLock();
   }
+}
+
+async function loadStateAfterLogin(){
+  state=await loadFromSupabase();
+  state.settings.logo||=DEFAULT_LOGO;
 }
 
 function showLock(){
@@ -105,11 +124,13 @@ function bindGlobal(){
       return;
     }
 
+    await loadStateAfterLogin();
     unlockApp();
   });
 
   $('#lock-button').onclick=async()=>{
     await supabaseClient.auth.signOut();
+    state=blankState();
     showLock();
   };
 
@@ -121,11 +142,11 @@ function bindGlobal(){
   };
 
   $('#quick-export').onclick=exportData;
-  $('#import-file').onchange=importData;
+  $('#import-file').onchange=importCloudData;
 }
 
 
-function render(view){currentView=view;$$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));$('.sidebar').classList.remove('open');({dashboard:renderDashboard,customers:renderCustomers,orders:renderOrders,invoices:renderInvoices,settings:renderSettings}[view])()}
+function render(view){currentView=view;$$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));$('.sidebar').classList.remove('open');({dashboard:renderDashboard,customers:renderCustomers,orders:renderOrders,invoices:renderInvoices,settings:renderCloudSettings}[view])()}
 
 function renderDashboard(){setTitle('Übersicht');const open=state.invoices.filter(i=>i.status==='Offen'&&!i.archived);$('#content').innerHTML=`<div class="grid stats"><div class="card stat"><span class="muted">Aktive Kunden</span><strong>${activeCustomers().length}</strong></div><div class="card stat"><span class="muted">Aufträge in Arbeit</span><strong>${state.orders.filter(o=>o.status==='In Arbeit'&&!o.archived).length}</strong></div><div class="card stat"><span class="muted">Offene Rechnungen</span><strong>${open.length}</strong></div><div class="card stat"><span class="muted">Offener Betrag</span><strong>${money(open.reduce((s,i)=>s+i.total,0))}</strong></div></div><div class="section-head"><h2>Schnellstart</h2></div><div class="actions"><button class="primary" onclick="customerForm()">Neuer Kunde</button><button class="secondary" onclick="orderForm()">Neuer Auftrag</button><button class="secondary" onclick="exportData()">Sicherung exportieren</button></div><div class="section-head"><h2>Letzte Aufträge</h2></div>${ordersTable(state.orders.filter(o=>!o.archived).slice(-5).reverse())}`}
 
@@ -145,7 +166,7 @@ function invoicesTable(rows){return rows.length?`<div class="table-wrap"><table>
 async function createInvoice(orderId){const o=state.orders.find(x=>x.id===orderId);if(!o||o.invoiceId)return;const d=today(),due=new Date(`${d}T12:00:00`);due.setDate(due.getDate()+Number(state.settings.paymentDays||30));const inv={id:uid(),number:nextNumber('RE',d),date:d,dueDate:due.toISOString().slice(0,10),orderId:o.id,orderNumber:o.number,customerId:o.customerId,customerSnapshot:structuredClone(o.customerSnapshot),items:structuredClone(o.items),total:o.total,status:'Offen',text:state.settings.invoiceText,archived:false,createdAt:new Date().toISOString()};state.invoices.push(inv);o.invoiceId=inv.id;await save();render('invoices');notice(`Rechnung ${inv.number} erstellt.`)}
 function invoiceForm(id){const i=state.invoices.find(x=>x.id===id),items=structuredClone(i.items);modal('Rechnung bearbeiten',`<form id="invoice-form"><div class="form-grid"><label>Rechnungsnummer<input value="${esc(i.number)}" disabled></label><label>Rechnungsdatum<input name="date" type="date" value="${i.date}" required></label><label>Fälligkeitsdatum<input name="dueDate" type="date" value="${i.dueDate}" required></label><label>Status<select name="status"><option ${i.status==='Offen'?'selected':''}>Offen</option><option ${i.status==='Bezahlt'?'selected':''}>Bezahlt</option><option ${i.status==='Storniert'?'selected':''}>Storniert</option></select></label><label class="span-2">Rechnungstext<textarea name="text">${esc(i.text)}</textarea></label><div class="span-2"><h3>Positionen</h3>${lineItemsEditor(items)}</div></div><div class="form-actions"><button type="button" class="secondary" onclick="closeModal()">Abbrechen</button><button class="primary">Speichern</button></div></form>`);wireLines(items);$('#invoice-form').onsubmit=async e=>{e.preventDefault();Object.assign(i,Object.fromEntries(new FormData(e.target)),{items,total:items.reduce((s,x)=>s+x.total,0),updatedAt:new Date().toISOString()});await save();closeModal();renderInvoices();notice('Rechnung gespeichert.')}}
 
-function renderSettings(){setTitle('Einstellungen');const s=state.settings;$('#content').innerHTML=`<form id="settings-form" class="card settings-block"><h2>Rechnungsinformationen</h2><div class="form-grid">${fields(s,[['name','Name / Firma'],['iban','IBAN'],['address','Adresse','text',true]])}<label>Zahlungsfrist in Tagen<input name="paymentDays" type="number" min="0" value="${s.paymentDays}"></label><label>Logo<input id="logo-file" type="file" accept="image/png,image/jpeg,image/webp"></label>${s.logo?`<img class="logo-preview" src="${s.logo}" alt="Aktuelles Logo">`:''}<label class="span-2">Standardtext Auftrag<textarea name="orderText">${esc(s.orderText)}</textarea></label><label class="span-2">Standardtext Rechnung<textarea name="invoiceText">${esc(s.invoiceText)}</textarea></label></div><div class="form-actions"><button class="primary">Einstellungen speichern</button></div></form><div class="card settings-block"><h2>Datensicherung</h2><p class="hint">Die Daten existieren nur in diesem Browser. Exportiere regelmässig eine Sicherung.</p><div class="backup-actions"><button class="primary" onclick="exportData()">Alle Daten exportieren</button><button class="secondary" onclick="document.querySelector('#import-file').click()">Daten ersetzen / importieren</button></div><p class="small muted">Letzter Export: ${state.lastExport?new Date(state.lastExport).toLocaleString('de-CH'):'Noch nie'}</p></div><form id="password-form" class="card settings-block"><h2>Passwort ändern</h2><div class="form-grid"><label>Aktuelles Passwort<input name="old" type="password" required></label><label>Neues Passwort<input name="next" type="password" minlength="6" required></label></div><div class="form-actions"><button class="secondary">Passwort ändern</button></div></form><div class="card settings-block danger-zone"><h2>Gefahrenbereich</h2><p>Ein vollständiges Zurücksetzen löscht alle lokalen Daten unwiderruflich.</p><button class="danger" onclick="resetEverything()">Anwendung zurücksetzen</button></div>`;$('#settings-form').onsubmit=async e=>{e.preventDefault();Object.assign(s,Object.fromEntries(new FormData(e.target)),{paymentDays:Number(new FormData(e.target).get('paymentDays'))});await save();notice('Einstellungen gespeichert.')};$('#logo-file').onchange=e=>{const f=e.target.files[0];if(!f)return;if(f.size>1_500_000){alert('Das Logo darf maximal 1,5 MB gross sein.');return}const r=new FileReader();r.onload=async()=>{s.logo=r.result;await save();renderSettings();notice('Logo gespeichert.')};r.readAsDataURL(f)};$('#password-form').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);if(await digest(f.get('old'),state.auth.salt)!==state.auth.hash){alert('Das aktuelle Passwort ist falsch.');return}const salt=uid();state.auth={salt,hash:await digest(f.get('next'),salt)};await save();e.target.reset();notice('Passwort geändert.')}}
+function renderSettings(){setTitle('Einstellungen');const s=state.settings;$('#content').innerHTML=`<form id="settings-form" class="card settings-block"><h2>Rechnungsinformationen</h2><div class="form-grid">${fields(s,[['name','Name / Firma'],['iban','IBAN'],['address','Adresse','text',true]])}<label>Zahlungsfrist in Tagen<input name="paymentDays" type="number" min="0" value="${s.paymentDays}"></label><label>Logo<input id="logo-file" type="file" accept="image/png,image/jpeg,image/webp"></label>${s.logo?`<img class="logo-preview" src="${s.logo}" alt="Aktuelles Logo">`:''}<label class="span-2">Standardtext Auftrag<textarea name="orderText">${esc(s.orderText)}</textarea></label><label class="span-2">Standardtext Rechnung<textarea name="invoiceText">${esc(s.invoiceText)}</textarea></label></div><div class="form-actions"><button class="primary">Einstellungen speichern</button></div></form><div class="card settings-block"><h2>Datensicherung</h2><p class="hint">Die Daten werden in Supabase gespeichert. Dieser Browser hält zusätzlich eine lokale Sicherung für den Offline- und Notfallbetrieb.</p><div class="backup-actions"><button class="primary" onclick="exportData()">Alle Daten exportieren</button><button class="secondary" onclick="document.querySelector('#import-file').click()">Daten ersetzen / importieren</button></div><p class="small muted">Letzter Export: ${state.lastExport?new Date(state.lastExport).toLocaleString('de-CH'):'Noch nie'}</p></div><div class="card settings-block danger-zone"><h2>Lokale Sicherung</h2><p>Damit wird nur die lokale Browser-Sicherung gelöscht. Die Daten in Supabase bleiben erhalten und werden nach dem Neuladen erneut abgerufen.</p><button class="danger" onclick="resetEverything()">Lokale Sicherung zurücksetzen</button></div>`;$('#settings-form').onsubmit=async e=>{e.preventDefault();Object.assign(s,Object.fromEntries(new FormData(e.target)),{paymentDays:Number(new FormData(e.target).get('paymentDays'))});await save();notice('Einstellungen gespeichert.')};$('#logo-file').onchange=e=>{const f=e.target.files[0];if(!f)return;if(f.size>1_500_000){alert('Das Logo darf maximal 1,5 MB gross sein.');return}const r=new FileReader();r.onload=async()=>{s.logo=r.result;await save();renderSettings();notice('Logo gespeichert.')};r.readAsDataURL(f)}}
 
 async function toggleArchive(kind,id){const x=state[kind].find(x=>x.id===id);if(!x)return;if(!x.archived&&kind!=='customers'&&((kind==='orders'&&x.status!=='Abgeschlossen')||(kind==='invoices'&&x.status==='Offen'))){alert('Nur abgeschlossene Aufträge beziehungsweise bezahlte oder stornierte Rechnungen können archiviert werden.');return}x.archived=!x.archived;await save();render(currentView);notice(x.archived?'Archiviert.':'Wieder aktiviert.')}
 async function exportData(){state.lastExport=new Date().toISOString();await save();const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`atelier-wuffli-backup-${today()}.json`;a.click();URL.revokeObjectURL(a.href);if(currentView==='settings')renderSettings();notice('Datensicherung exportiert.')}
@@ -183,9 +204,6 @@ async function importData(e){
     // Lokale Sicherheitskopie behalten
     await save();
 
-    // Zentral in Supabase speichern
-    await saveToSupabase();
-
     render(currentView);
     notice('Backup erfolgreich nach Supabase übertragen.');
   }catch(err){
@@ -193,9 +211,29 @@ async function importData(e){
     alert(`Import fehlgeschlagen: ${err.message}`);
   }
 }
-async function resetEverything(){if(confirm('Alle lokalen Daten löschen?')&&confirm('Dieser Vorgang kann nicht rückgängig gemacht werden. Fortfahren?')){await clearDB();location.reload()}}
+async function resetEverything(){if(confirm('Aktuellen Datenstand neu aus Supabase laden? Nicht gespeicherte Eingaben gehen verloren.')){state=await loadFromSupabase();render(currentView);notice('Daten neu geladen.')}}
 function docAddress(s){return esc(s||'').replaceAll('\n','<br>')}
 function printDocument(type,id){const d=type==='order'?state.orders.find(x=>x.id===id):state.invoices.find(x=>x.id===id);if(!d)return;const s=state.settings,isInv=type==='invoice',items=d.items.map(x=>`<tr><td>${esc(x.description)}</td><td>${x.quantity}</td><td>${money(x.price)}</td><td>${money(x.total)}</td></tr>`).join('');const fulfil=!isInv?`<p><strong>${esc(d.fulfilment)}</strong> am ${date(d.fulfilmentDate)}${d.fulfilment==='Lieferung'&&d.customerSnapshot.delivery?`<br>${esc(d.customerSnapshot.delivery.label)}<br>${esc(d.customerSnapshot.delivery.street)}<br>${esc(d.customerSnapshot.delivery.city)}`:''}</p>`:'';const html=`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${esc(d.number)}</title><style>@page{size:A4;margin:20mm}body{font:12px Arial;color:#222}header{display:flex;justify-content:space-between;min-height:120px}img{max-width:180px;max-height:80px}h1{font-size:24px;margin-top:40px}table{width:100%;border-collapse:collapse;margin-top:30px}th,td{text-align:left;padding:9px;border-bottom:1px solid #ccc}th:last-child,td:last-child{text-align:right}.total{text-align:right;font-size:18px;font-weight:bold;margin-top:20px}.footer{margin-top:45px;line-height:1.6}.muted{color:#666}@media print{button{display:none}}</style></head><body><button onclick="window.print()">Als PDF speichern / Drucken</button><header><div>${s.logo?`<img src="${s.logo}">`:''}<p><strong>${esc(s.name)}</strong><br>${docAddress(s.address)}</p></div><div><strong>${esc(d.customerSnapshot.name)}</strong><br>${esc(d.customerSnapshot.billing.street||'')}<br>${esc([d.customerSnapshot.billing.zip,d.customerSnapshot.billing.city].filter(Boolean).join(' '))}</div></header><h1>${isInv?'Rechnung':'Auftrag'} ${esc(d.number)}</h1><p>Datum: ${date(d.date)}${isInv?`<br>Auftrag: ${esc(d.orderNumber||'–')}`:''}</p>${fulfil}<table><thead><tr><th>Beschreibung</th><th>Menge</th><th>Einzelpreis</th><th>Betrag</th></tr></thead><tbody>${items}</tbody></table><p class="total">Gesamtbetrag: ${money(d.total)}</p><div class="footer">${docAddress(d.text)}${isInv?`<p>Zahlbar bis ${date(d.dueDate)}<br>IBAN: ${esc(s.iban)}<br>Referenz: ${esc(d.number)}</p>`:''}</div><script>setTimeout(()=>window.print(),400)<\/script></body></html>`;const w=window.open('','_blank');if(!w){alert('Bitte Pop-ups für die PDF-Ausgabe erlauben.');return}w.document.write(html);w.document.close()}
 
-Object.assign(window,{customerForm,orderForm,invoiceForm,createInvoice,printDocument,toggleArchive,exportData,closeModal,resetEverything});
-init().catch(err=>{console.error(err);alert('Die lokale Datenbank konnte nicht geöffnet werden.')});
+function renderCloudSettings(){
+  setTitle('Einstellungen');const s=state.settings;
+  $('#content').innerHTML=`<form id="settings-form" class="card settings-block"><h2>Rechnungsinformationen</h2><div class="form-grid">${fields(s,[['name','Name / Firma'],['iban','IBAN'],['address','Adresse','text',true]])}<label>Zahlungsfrist in Tagen<input name="paymentDays" type="number" min="0" value="${s.paymentDays}"></label><label>Logo<input id="logo-file" type="file" accept="image/png,image/jpeg,image/webp"></label>${s.logo?`<img class="logo-preview" src="${s.logo}" alt="Aktuelles Logo">`:''}<label class="span-2">Standardtext Auftrag<textarea name="orderText">${esc(s.orderText)}</textarea></label><label class="span-2">Standardtext Rechnung<textarea name="invoiceText">${esc(s.invoiceText)}</textarea></label></div><div class="form-actions"><button class="primary">Einstellungen speichern</button></div></form><div class="card settings-block"><h2>Datensicherung</h2><p class="hint">Alle Geschäftsdaten werden zentral in Supabase gespeichert. Der Export enthält den vollständigen Datenbestand.</p><div class="backup-actions"><button class="primary" onclick="exportData()">Alle Daten exportieren</button><button class="secondary" onclick="document.querySelector('#import-file').click()">Daten vollständig ersetzen / importieren</button><button class="secondary" onclick="reloadCloudData()">Aus Supabase neu laden</button></div><p class="small muted">Datenrevision: ${state.revision}</p></div>`;
+  $('#settings-form').onsubmit=async e=>{e.preventDefault();Object.assign(s,Object.fromEntries(new FormData(e.target)),{paymentDays:Number(new FormData(e.target).get('paymentDays'))});await save();notice('Einstellungen gespeichert.')};
+  $('#logo-file').onchange=e=>{const f=e.target.files[0];if(!f)return;if(f.size>1_500_000){alert('Das Logo darf maximal 1,5 MB gross sein.');return}const r=new FileReader();r.onload=async()=>{s.logo=r.result;await save();renderCloudSettings();notice('Logo gespeichert.')};r.readAsDataURL(f)};
+}
+async function reloadCloudData(){state=await loadFromSupabase();render(currentView);notice('Aktueller Supabase-Datenstand geladen.')}
+
+async function importCloudData(e){
+  const file=e.target.files[0];e.target.value='';if(!file)return;
+  try{
+    const data=JSON.parse(await file.text());
+    if(![1,2].includes(Number(data.version))||!Array.isArray(data.customers)||!Array.isArray(data.orders)||!Array.isArray(data.invoices)||!data.settings)throw new Error('Ungültiges Backup-Format');
+    if(!confirm(`Import enthält ${data.customers.length} Kunden, ${data.orders.length} Aufträge und ${data.invoices.length} Rechnungen. Der gesamte aktuelle Supabase-Datenbestand wird ersetzt. Fortfahren?`))return;
+    const currentRevision=state.revision;
+    state=normalizeState(data);state.revision=currentRevision;
+    await save();render(currentView);notice('Backup vollständig nach Supabase importiert.');
+  }catch(error){console.error(error);alert(`Import fehlgeschlagen: ${error.message}`)}
+}
+
+Object.assign(window,{customerForm,orderForm,invoiceForm,createInvoice,printDocument,toggleArchive,exportData,closeModal,resetEverything,reloadCloudData});
+init().catch(err=>{console.error(err);alert('Supabase konnte nicht geladen werden. Bitte Internetverbindung und Datenbankeinrichtung prüfen.')});

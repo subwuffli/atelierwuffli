@@ -1,17 +1,34 @@
 # Atelier Wuffli ERP
 
-Ein einfaches, deutschsprachiges ERP für Kunden, Aufträge und Rechnungen. Die Anwendung läuft vollständig im Browser und speichert alle Geschäftsdaten lokal auf dem jeweiligen Gerät.
+Deutschsprachiges Mehrbenutzer-ERP für Kunden, Aufträge und Rechnungen. Die Anwendung wird über GitHub Pages ausgeliefert; Anmeldung und sämtliche Geschäftsdaten liegen in Supabase.
 
-## Datensicherheit
+## Supabase einmalig einrichten
 
-- Regelmässig über **Einstellungen → Datensicherung → Exportieren** sichern.
-- Browserdaten sind nicht verschlüsselt und werden nicht mit GitHub synchronisiert.
-- Ein Zurücksetzen bei vergessenem Passwort löscht alle nicht exportierten Daten.
+1. Im Supabase-Dashboard den **SQL Editor** öffnen.
+2. Den vollständigen Inhalt von `supabase/migration.sql` ausführen.
+3. Unter **Authentication → Users** alle gewünschten ERP-Benutzer anlegen.
+4. Selbstregistrierung deaktiviert lassen, wenn Benutzer nur durch den Administrator angelegt werden sollen.
+5. Danach die GitHub-Pages-Anwendung neu laden und anmelden.
 
-## GitHub Pages
+Falls bereits Daten in der früheren Tabelle `erp_data` liegen, übernimmt die Migration sie beim ersten Lauf automatisch in die neuen Tabellen. Die alte Tabelle wird vorsichtshalber nicht gelöscht.
 
-In den Repository-Einstellungen unter **Pages** als Quelle den Branch `main` und den Ordner `/ (root)` wählen.
+Das Schema ist relational aufgebaut. Kunden, Lieferadressen, Aufträge, Positionen, Rechnungen und Zähler besitzen jeweils eigene Tabellen und können später durch Spalten oder zusätzliche Tabellen erweitert werden.
 
-## Lokal starten
+## Datensicherung
 
-Die `index.html` kann direkt geöffnet werden. Für konsistentes Browser-Verhalten empfiehlt sich ein einfacher lokaler Webserver.
+- **Exportieren** lädt den vollständigen Supabase-Datenbestand als JSON-Datei herunter.
+- **Importieren** ersetzt nach einer deutlichen Bestätigung den gesamten Datenbestand transaktional.
+- Der Import unterstützt alte Backups der Version 1 sowie neue Backups der Version 2.
+- Dokumentnummern werden atomar in Supabase vergeben, damit mehrere Benutzer keine doppelten Nummern erzeugen.
+- Eine Revisionsprüfung verhindert, dass ein Benutzer unbemerkt Änderungen eines anderen überschreibt.
+
+## Sicherheit
+
+- Nur bei Supabase angemeldete Benutzer erhalten über Row Level Security Zugriff.
+- Alle angelegten Benutzer teilen denselben ERP-Datenbestand.
+- Die Supabase-Publishable-Key im Browser ist öffentlich und wird durch Authentifizierung und RLS abgesichert.
+- Passwörter und Service-Role-Keys dürfen niemals im Repository gespeichert werden.
+
+## Veröffentlichung
+
+Pushes auf `main` werden über `.github/workflows/pages.yml` automatisch auf GitHub Pages veröffentlicht.

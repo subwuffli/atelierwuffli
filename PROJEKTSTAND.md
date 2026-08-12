@@ -1,6 +1,8 @@
 # Projektstand – Atelier Wuffli ERP
 
-Stand: 11. August 2026
+Stand: 12. August 2026
+
+> Architekturänderung: Supabase ist nun die einzige Datenquelle. Die früher dokumentierte lokale IndexedDB-Speicherung ist nicht mehr aktuell.
 
 ## Veröffentlichung
 
