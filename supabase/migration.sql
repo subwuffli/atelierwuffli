@@ -159,7 +159,12 @@ begin
   if p_expected_revision is not null and current_revision <> p_expected_revision then
     raise exception 'CONFLICT: Daten wurden zwischenzeitlich von einem anderen Benutzer geändert';
   end if;
-  delete from invoice_items; delete from invoices; delete from order_items; delete from orders; delete from delivery_addresses; delete from customers;
+  delete from invoice_items where true;
+  delete from invoices where true;
+  delete from order_items where true;
+  delete from orders where true;
+  delete from delivery_addresses where true;
+  delete from customers where true;
   update company_settings set name=coalesce(p_data#>>'{settings,name}',''),address=coalesce(p_data#>>'{settings,address}',''),iban=coalesce(p_data#>>'{settings,iban}',''),payment_days=coalesce((p_data#>>'{settings,paymentDays}')::int,30),logo=coalesce(p_data#>>'{settings,logo}',''),order_text=coalesce(p_data#>>'{settings,orderText}',''),invoice_text=coalesce(p_data#>>'{settings,invoiceText}',''),updated_at=now() where id='main';
   for c in select * from jsonb_array_elements(coalesce(p_data->'customers','[]')) loop
     insert into customers(id,number,company,salutation,first_name,last_name,email,phone,street,zip,city,notes,archived,created_at,updated_at) values((c->>'id')::uuid,c->>'number',coalesce(c->>'company',''),coalesce(c->>'salutation',''),coalesce(c->>'firstName',''),coalesce(c->>'lastName',''),coalesce(c->>'email',''),coalesce(c->>'phone',''),coalesce(c->>'street',''),coalesce(c->>'zip',''),coalesce(c->>'city',''),coalesce(c->>'notes',''),coalesce((c->>'archived')::boolean,false),coalesce((c->>'createdAt')::timestamptz,now()),coalesce((c->>'updatedAt')::timestamptz,now()));
