@@ -1,6 +1,6 @@
 # Atelier Wuffli ERP
 
-Aktuelle Version: **V0.0.10**
+Aktuelle Version: **V0.0.11**
 
 Bei jeder veröffentlichten Änderung wird die letzte Versionsstelle um eins erhöht (`V0.0.2`, `V0.0.3`, …). Die Version wird in der Seitenleiste oberhalb von **Sperren** angezeigt.
 
