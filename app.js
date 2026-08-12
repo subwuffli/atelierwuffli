@@ -32,37 +32,83 @@ function nextNumber(prefix,d=today()){const short=d.slice(2).replaceAll('-','-')
 
 
 async function init(){
-  const { data, error } = await supabaseClient
-    .from('erp_data')
-    .select('id')
-    .eq('id','main');
-
-  if(error){
-    console.error('Supabase-Verbindung fehlgeschlagen:', error);
-    alert('Supabase-Verbindung fehlgeschlagen: ' + error.message);
-  }else{
-    console.log('Supabase-Verbindung erfolgreich:', data);
-  }
-
   state=await dbGet()||blankState();
   state.settings.logo||=DEFAULT_LOGO;
-  if(!state.auth)showLock(true);
-  else showLock(false);
+
   bindGlobal();
+
+  const { data: { session }, error } = await supabaseClient.auth.getSession();
+
+  if(error){
+    console.error('Supabase Session konnte nicht geladen werden:', error);
+    showLock();
+    return;
+  }
+
+  if(session){
+    unlockApp();
+  }else{
+    showLock();
+  }
 }
 
+function showLock(){
+  $('#app').classList.add('hidden');
+  $('#lock-screen').classList.remove('hidden');
+  $('#lock-title').textContent='ERP anmelden';
+  $('#lock-help').textContent='Melde dich mit deinem ERP-Benutzer an.';
+  $('#email').value='';
+  $('#password').value='';
+  $('#lock-error').textContent='';
+  $('#email').focus();
+}
 
-function showLock(setup){$('#app').classList.add('hidden');$('#lock-screen').classList.remove('hidden');$('#lock-title').textContent=setup?'ERP einrichten':'ERP entsperren';$('#lock-help').textContent=setup?'Lege ein lokales Passwort mit mindestens 6 Zeichen fest.':'Gib dein lokales Passwort ein.';$('#reset-link').classList.toggle('hidden',setup);$('#password').value='';$('#password').focus()}
-function unlockApp(){sessionStorage.setItem('aw-unlocked','1');$('#lock-screen').classList.add('hidden');$('#app').classList.remove('hidden');render('dashboard')}
+function unlockApp(){
+  $('#lock-screen').classList.add('hidden');
+  $('#app').classList.remove('hidden');
+  render('dashboard');
+}
+
 function bindGlobal(){
-  $('#unlock-form').addEventListener('submit',async e=>{e.preventDefault();const p=$('#password').value,err=$('#lock-error');err.textContent='';if(p.length<6){err.textContent='Das Passwort muss mindestens 6 Zeichen enthalten.';return}if(!state.auth){const salt=uid();state.auth={salt,hash:await digest(p,salt)};await save();unlockApp()}else if(await digest(p,state.auth.salt)===state.auth.hash)unlockApp();else err.textContent='Das Passwort ist nicht korrekt.'});
-  $('#reset-link').onclick=async()=>{if(confirm('Alle lokalen Daten unwiderruflich löschen? Nur eine Exportdatei kann sie wiederherstellen.')&&confirm('Wirklich vollständig zurücksetzen?')){await clearDB();state=blankState();showLock(true)}};
-  $('#lock-button').onclick=()=>{sessionStorage.removeItem('aw-unlocked');showLock(false)};
+  $('#unlock-form').addEventListener('submit',async e=>{
+    e.preventDefault();
+
+    const email=$('#email').value.trim();
+    const password=$('#password').value;
+    const err=$('#lock-error');
+
+    err.textContent='';
+
+    const { error }=await supabaseClient.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if(error){
+      err.textContent='Anmeldung fehlgeschlagen: '+error.message;
+      return;
+    }
+
+    unlockApp();
+  });
+
+  $('#lock-button').onclick=async()=>{
+    await supabaseClient.auth.signOut();
+    showLock();
+  };
+
   $('#menu-button').onclick=()=>$('.sidebar').classList.toggle('open');
-  $('#nav').onclick=e=>{const b=e.target.closest('[data-view]');if(b)render(b.dataset.view)};
-  $('#quick-export').onclick=exportData;$('#import-file').onchange=importData;
-  if(state.auth&&sessionStorage.getItem('aw-unlocked')==='1')unlockApp();
+
+  $('#nav').onclick=e=>{
+    const b=e.target.closest('[data-view]');
+    if(b)render(b.dataset.view);
+  };
+
+  $('#quick-export').onclick=exportData;
+  $('#import-file').onchange=importData;
 }
+
+
 function render(view){currentView=view;$$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));$('.sidebar').classList.remove('open');({dashboard:renderDashboard,customers:renderCustomers,orders:renderOrders,invoices:renderInvoices,settings:renderSettings}[view])()}
 
 function renderDashboard(){setTitle('Übersicht');const open=state.invoices.filter(i=>i.status==='Offen'&&!i.archived);$('#content').innerHTML=`<div class="grid stats"><div class="card stat"><span class="muted">Aktive Kunden</span><strong>${activeCustomers().length}</strong></div><div class="card stat"><span class="muted">Aufträge in Arbeit</span><strong>${state.orders.filter(o=>o.status==='In Arbeit'&&!o.archived).length}</strong></div><div class="card stat"><span class="muted">Offene Rechnungen</span><strong>${open.length}</strong></div><div class="card stat"><span class="muted">Offener Betrag</span><strong>${money(open.reduce((s,i)=>s+i.total,0))}</strong></div></div><div class="section-head"><h2>Schnellstart</h2></div><div class="actions"><button class="primary" onclick="customerForm()">Neuer Kunde</button><button class="secondary" onclick="orderForm()">Neuer Auftrag</button><button class="secondary" onclick="exportData()">Sicherung exportieren</button></div><div class="section-head"><h2>Letzte Aufträge</h2></div>${ordersTable(state.orders.filter(o=>!o.archived).slice(-5).reverse())}`}
