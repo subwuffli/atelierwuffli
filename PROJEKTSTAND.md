@@ -2,7 +2,7 @@
 
 Stand: 12. August 2026
 
-Aktuelle App-Version: `V0.0.14`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
+Aktuelle App-Version: `V0.0.15`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
 
 > Architekturänderung: Supabase ist nun die einzige Datenquelle. Die früher dokumentierte lokale IndexedDB-Speicherung ist nicht mehr aktuell.
 
@@ -31,6 +31,8 @@ V0.0.12: Bezahlte Rechnungen erhalten auf Wunsch eine unveränderliche Quittung 
 V0.0.13: Eigener Navigationsbereich für Quittungen; überfällige offene Rechnungen werden rot hervorgehoben.
 
 V0.0.14: Die Rechnungsfälligkeit basiert auf dem Abhol-/Lieferdatum plus Zahlungsfrist und wird bei Auftragsänderungen automatisch neu berechnet.
+
+V0.0.15: Bereits erstellte Quittungen werden nach Änderungen an Rechnung oder Auftrag automatisch mit den aktuellen Belegdaten neu aufgebaut; Nummer und Datum bleiben unverändert.
 
 ## Veröffentlichung
 
