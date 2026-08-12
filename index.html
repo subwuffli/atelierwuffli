@@ -9,15 +9,25 @@
 </head>
 <body>
   <div id="lock-screen" class="lock-screen">
-    <form id="unlock-form" class="card lock-card">
-      <p class="eyebrow">ATELIER WUFFLI</p>
-      <h1 id="lock-title">ERP einrichten</h1>
-      <p id="lock-help" class="muted">Lege ein lokales Passwort für dieses Gerät fest.</p>
-      <label>Passwort<input id="password" type="password" minlength="6" autocomplete="current-password" required></label>
-      <button class="primary" type="submit">Weiter</button>
-      <button id="reset-link" class="text-button hidden" type="button">Passwort vergessen / alles zurücksetzen</button>
-      <p id="lock-error" class="error" role="alert"></p>
-    </form>
+<form id="unlock-form" class="card lock-card">
+  <p class="eyebrow">ATELIER WUFFLI</p>
+  <h1 id="lock-title">ERP anmelden</h1>
+  <p id="lock-help" class="muted">Melde dich mit deinem ERP-Benutzer an.</p>
+
+  <label>
+    E-Mail
+    <input id="email" type="email" autocomplete="username" required>
+  </label>
+
+  <label>
+    Passwort
+    <input id="password" type="password" autocomplete="current-password" required>
+  </label>
+
+  <button class="primary" type="submit">Anmelden</button>
+
+  <p id="lock-error" class="error" role="alert"></p>
+</form>
   </div>
 
   <div id="app" class="app hidden">
