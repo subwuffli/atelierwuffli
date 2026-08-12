@@ -305,10 +305,15 @@ customerForm=async function(id){
   if(id){
     try{
       if(!(await acquireEditLock('customer',id))){alert('Dieser Kunde wird gerade auf einem anderen Gerät bearbeitet. Bitte versuche es später erneut.');return}
+      const latest=await loadFromSupabase();
+      state=latest;
+      state.settings.logo||=DEFAULT_LOGO;
     }catch(error){
       console.error('Bearbeitungssperre nicht verfügbar:',error);
       notice(`Bearbeitungssperre nicht verfügbar: ${error?.message||'Unbekannter Fehler'}. Die Änderung wird beim Speichern auf Konflikte geprüft.`);
     }
+  }else{
+    try{state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO}catch(error){alert(`Aktuelle Kundendaten konnten nicht geladen werden: ${error.message}`);return}
   }
   originalCustomerForm(id);
 };
