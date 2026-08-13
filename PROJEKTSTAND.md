@@ -2,7 +2,7 @@
 
 Stand: 12. August 2026
 
-Aktuelle App-Version: `V0.0.22`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
+Aktuelle App-Version: `V0.0.23`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
 
 > Architekturänderung: Supabase ist nun die einzige Datenquelle. Die früher dokumentierte lokale IndexedDB-Speicherung ist nicht mehr aktuell.
 
@@ -43,6 +43,8 @@ V0.0.19: Auftrag, Rechnung, Quittung sowie Einnahmen- und Ausgabenberichte verwe
 V0.0.20: Lieferaufträge können die Fahrstrecke und geschätzte Fahrzeit zwischen der Geschäftsadresse und der ausgewählten Lieferadresse über OpenStreetMap und OSRM berechnen und die Route auf der Karte öffnen.
 V0.0.21: Desktop- und Mobilansichten wurden vollständig geprüft. Formulare, Dialoge, Eingabefelder und Schaltflächen sind einheitlich ausgerichtet; mobile Dialoge haben keinen horizontalen Überlauf mehr und besitzen eine gut erreichbare Speicherleiste.
 V0.0.22: Die PDF-Formulare verwenden die neue Anordnung mit Logo rechts, kompakten Informationen und dezenten warmgrauen Flächen. Im Auftragsformular kann ein neuer Kunde direkt erfasst, gespeichert und ausgewählt werden.
+
+V0.0.23: Rechnungsinformationen wurden in Name, Firma, Strasse sowie PLZ/Ort aufgeteilt. Bankinformationen und eine MWST-Nummer für die spätere Verwendung wurden ergänzt. PDFs verwenden die neuen Geschäfts- und Bankdaten; Quittungen zeigen zusätzlich die Zahlungsart und führen die Firma vor dem Namen auf.
 
 ## Veröffentlichung
 
