@@ -86,6 +86,14 @@ function customerGreeting(document){
   if(salutation==='sie'||salutation==='frau')return `Liebe ${name},`;
   return `Guten Tag ${name},`
 }
+async function deliverPdf(doc,fileName){
+  const blob=doc.output('blob'),file=new File([blob],fileName,{type:'application/pdf'}),mobile=window.matchMedia?.('(pointer: coarse)').matches||window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;
+  if(mobile&&navigator.share&&navigator.canShare?.({files:[file]})){
+    try{await navigator.share({files:[file],title:fileName});return}catch(error){if(error?.name==='AbortError')return;console.warn('PDF konnte nicht direkt geteilt werden:',error)}
+  }
+  if(mobile){doc.save(fileName);return}
+  const blobUrl=URL.createObjectURL(blob),opened=window.open(blobUrl,'_blank');if(!opened)doc.save(fileName);setTimeout(()=>URL.revokeObjectURL(blobUrl),60000)
+}
 function activeCustomers(){return state.customers.filter(c=>!c.archived)}
 async function nextNumber(prefix,d=today()){const {data,error}=await supabaseClient.rpc('next_document_number',{p_prefix:prefix,p_date:d});if(error)throw error;return data}
 async function nextCustomerNumber(){const {data,error}=await supabaseClient.rpc('next_customer_number');if(error)throw error;return data}
@@ -261,7 +269,7 @@ async function pdfMonthlyReport(kind,month){
   let y=142;doc.setFillColor(...rose);doc.roundedRect(15,y,180,10,2,2,'F');doc.setTextColor(...ink);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Datum',20,y+6.5);doc.text(isExpense?'Beschreibung':'Rechnung / Kunde',48,y+6.5);doc.text('Betrag',190,y+6.5,{align:'right'});y+=12;doc.setFont('helvetica','normal');
   for(const x of rows){const description=isExpense?String(x.description||''):`${x.number}  ${x.customerSnapshot?.name||''}`,parts=doc.splitTextToSize(description,115),height=Math.max(9,parts.length*4.5+3);if(y+height>255){doc.addPage();decorate();y=24}doc.text(date(isExpense?x.date:incomeDate(x)),20,y+4);doc.text(parts,48,y+4);doc.text(money(isExpense?x.amount:x.total),190,y+4,{align:'right'});doc.setDrawColor(222,217,214);doc.line(15,y+height,195,y+height);y+=height}
   y+=7;doc.setDrawColor(...roseStrong);doc.line(112,y,195,y);y+=9;doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text('Monatstotal',116,y);doc.setFontSize(16);doc.text(money(total),190,y,{align:'right'});doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);[...businessIdentityLines(s),...businessAddressLines(s)].filter(Boolean).forEach((line,index)=>doc.text(line,20,270+index*4.5));
-  const file=`${isExpense?'Ausgaben':'Einnahmen'}-${month}.pdf`,standalone=window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;if(standalone){doc.save(file);return}const url=URL.createObjectURL(doc.output('blob')),opened=window.open(url,'_blank');if(!opened)doc.save(file);setTimeout(()=>URL.revokeObjectURL(url),60000)
+  const file=`${isExpense?'Ausgaben':'Einnahmen'}-${month}.pdf`;await deliverPdf(doc,file)
 }
 
 function renderSettings(){setTitle('Einstellungen');const s=state.settings;$('#content').innerHTML=`<form id="settings-form" class="card settings-block"><h2>Rechnungsinformationen</h2><div class="form-grid">${fields(s,[['name','Name / Firma'],['iban','IBAN'],['address','Adresse','text',true]])}<label>Zahlungsfrist in Tagen<input name="paymentDays" type="number" min="0" value="${s.paymentDays}"></label><label>Logo<input id="logo-file" type="file" accept="image/png,image/jpeg,image/webp"></label>${s.logo?`<img class="logo-preview" src="${s.logo}" alt="Aktuelles Logo">`:''}<label class="span-2">Standardtext Auftrag<textarea name="orderText">${esc(s.orderText)}</textarea></label><label class="span-2">Standardtext Rechnung<textarea name="invoiceText">${esc(s.invoiceText)}</textarea></label></div><div class="form-actions"><button class="primary">Einstellungen speichern</button></div></form><div class="card settings-block"><h2>Datensicherung</h2><p class="hint">Die Daten werden in Supabase gespeichert. Dieser Browser hält zusätzlich eine lokale Sicherung für den Offline- und Notfallbetrieb.</p><div class="backup-actions"><button class="primary" onclick="exportData()">Alle Daten exportieren</button><button class="secondary" onclick="document.querySelector('#import-file').click()">Daten ersetzen / importieren</button></div><p class="small muted">Letzter Export: ${state.lastExport?new Date(state.lastExport).toLocaleString('de-CH'):'Noch nie'}</p></div><div class="card settings-block danger-zone"><h2>Lokale Sicherung</h2><p>Damit wird nur die lokale Browser-Sicherung gelöscht. Die Daten in Supabase bleiben erhalten und werden nach dem Neuladen erneut abgerufen.</p><button class="danger" onclick="resetEverything()">Lokale Sicherung zurücksetzen</button></div>`;$('#settings-form').onsubmit=async e=>{e.preventDefault();Object.assign(s,Object.fromEntries(new FormData(e.target)),{paymentDays:Number(new FormData(e.target).get('paymentDays'))});await save();notice('Einstellungen gespeichert.')};$('#logo-file').onchange=e=>{const f=e.target.files[0];if(!f)return;if(f.size>1_500_000){alert('Das Logo darf maximal 1,5 MB gross sein.');return}const r=new FileReader();r.onload=async()=>{s.logo=r.result;await save();renderSettings();notice('Logo gespeichert.')};r.readAsDataURL(f)}}
@@ -525,7 +533,7 @@ async function pdfDocument(type,id){
     else if(isInv){doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Rechnungsinformationen',20,225);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);[...companyLines,`Zahlbar bis ${date(d.dueDate)}`,`Referenz: ${d.number}`].forEach((line,index)=>doc.text(line,20,233+index*4.5));if(bankLines.length){doc.setTextColor(...ink);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Bankinformationen',112,225);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);bankLines.forEach((line,index)=>doc.text(line,112,233+index*4.5))}}
     else{doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Auftragsinformationen',20,225);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);const info=[...companyLines,`${d.fulfilment||'Erfüllung'} am ${date(d.fulfilmentDate)}`];if(d.text)info.push(...doc.splitTextToSize(String(d.text),75));info.forEach((line,index)=>doc.text(line,20,233+index*4.5))}
     doc.setTextColor(...ink);doc.setFont('times','italic');doc.setFontSize(isReceipt?24:20);doc.text('Vielen Dank!',105,270,{align:'center'});
-    const standalone=window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true,fileName=`${d.number}.pdf`;if(standalone){doc.save(fileName);return}const blobUrl=URL.createObjectURL(doc.output('blob')),opened=window.open(blobUrl,'_blank');if(!opened)doc.save(fileName);setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);return;
+    await deliverPdf(doc,`${d.number}.pdf`);return;
   }
   let y=18;
   if(s.logo){try{const logoData=s.logo.startsWith('data:')?s.logo:await fetch(s.logo).then(r=>r.blob()).then(blob=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(blob)}));doc.addImage(logoData,undefined,15,y,34,34,'logo','FAST')}catch(error){console.warn('Logo konnte nicht ins PDF eingefügt werden:',error)}}
@@ -538,9 +546,7 @@ async function pdfDocument(type,id){
   y+=5;doc.setFontSize(13);doc.text(`Gesamtbetrag: ${money(d.total)}`,193,y,{align:'right'});y+=12;doc.setFontSize(10);
   if(d.text){doc.text(doc.splitTextToSize(String(d.text),175),15,y);y+=15}
   if(isReceipt){doc.setFontSize(12);doc.text('Der Rechnungsbetrag wurde vollständig bezahlt.',15,y);doc.setFontSize(10);doc.text(`Rechnung: ${d.invoiceNumber}`,15,y+8)}else if(isInv){doc.text(`Zahlbar bis ${date(d.dueDate)}`,15,y);doc.text(`IBAN: ${s.iban||''}`,15,y+6);doc.text(`Referenz: ${d.number}`,15,y+12)}
-  const standalone=window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true,fileName=`${d.number}.pdf`;
-  if(standalone){doc.save(fileName);return}
-  const blobUrl=URL.createObjectURL(doc.output('blob')),opened=window.open(blobUrl,'_blank');if(!opened)doc.save(fileName);setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);
+  await deliverPdf(doc,`${d.number}.pdf`);
 }
 printDocument=async function(type,id){
   const invoice=state.invoices.find(x=>x.id===id),d=type==='order'?state.orders.find(x=>x.id===id):type==='receipt'?invoice?.receipt:invoice;if(!d)return;

@@ -2,7 +2,7 @@
 
 Stand: 12. August 2026
 
-Aktuelle App-Version: `V0.0.29`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
+Aktuelle App-Version: `V0.0.30`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
 
 > Architekturänderung: Supabase ist nun die einzige Datenquelle. Die früher dokumentierte lokale IndexedDB-Speicherung ist nicht mehr aktuell.
 
@@ -57,6 +57,8 @@ V0.0.27: Sämtliche aktuellen Formularfelder werden vollständig in Supabase ges
 V0.0.28: Die Kundenanrede ist eine feste Auswahl (Herr, Sie, Divers), wird in Supabase gespeichert und erzeugt in Rechnungs- und Auftrags-PDFs eine persönliche Begrüssung mit dem Kundennamen.
 
 V0.0.29: Die zusätzliche Absender-Kopfzeile oben links wurde aus allen PDF-Formularen entfernt.
+
+V0.0.30: Auf Mobilgeräten werden erzeugte PDFs als native PDF-Dateien an die Teilen-Funktion übergeben. Unterstützt das Gerät dies nicht, wird die Datei heruntergeladen, statt einen temporären Link zu teilen.
 
 ## Veröffentlichung
 
