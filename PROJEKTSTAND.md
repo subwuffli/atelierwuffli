@@ -2,7 +2,7 @@
 
 Stand: 12. August 2026
 
-Aktuelle App-Version: `V0.0.19`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
+Aktuelle App-Version: `V0.0.20`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
 
 > Architekturänderung: Supabase ist nun die einzige Datenquelle. Die früher dokumentierte lokale IndexedDB-Speicherung ist nicht mehr aktuell.
 
@@ -40,6 +40,7 @@ V0.0.17: Rechnungs- und Quittungs-PDFs erhalten ein neues florales Rosé-Layout 
 
 V0.0.18: Die angedeuteten Blumen und Punkte wurden aus den PDFs entfernt; Dankes- und Belegbereiche liegen bei Rechnung und Quittung ohne weiße Kästen direkt auf dem Seitenhintergrund.
 V0.0.19: Auftrag, Rechnung, Quittung sowie Einnahmen- und Ausgabenberichte verwenden das neue einheitliche PDF-Design. Der neue Bereich Termine listet offene Abhol- und Liefertermine nach Kalenderwoche und Datum.
+V0.0.20: Lieferaufträge können die Fahrstrecke und geschätzte Fahrzeit zwischen der Geschäftsadresse und der ausgewählten Lieferadresse über OpenStreetMap und OSRM berechnen und die Route auf der Karte öffnen.
 
 ## Veröffentlichung
 
