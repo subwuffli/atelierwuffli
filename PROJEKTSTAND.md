@@ -2,7 +2,7 @@
 
 Stand: 12. August 2026
 
-Aktuelle App-Version: `V0.0.26`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
+Aktuelle App-Version: `V0.0.27`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
 
 > Architekturänderung: Supabase ist nun die einzige Datenquelle. Die früher dokumentierte lokale IndexedDB-Speicherung ist nicht mehr aktuell.
 
@@ -51,6 +51,8 @@ V0.0.24: Oberhalb von „Neu laden“ zeigt Supabase Realtime Presence die aktue
 V0.0.25: Gleichzeitige Anmeldungen desselben Benutzers werden nach Gerät getrennt angezeigt. Mehrere Browser-Tabs auf demselben Gerät bleiben zu einem Eintrag zusammengefasst.
 
 V0.0.26: Die Kundenadresse auf Quittungen trägt die eindeutige Bezeichnung „Quittung für“ statt „Zahlungsempfänger“.
+
+V0.0.27: Sämtliche aktuellen Formularfelder werden vollständig in Supabase gespeichert und wieder eingelesen. Dies umfasst insbesondere Zahlungsart, getrennte Geschäftsadresse, Bank- und MWST-Angaben. Zudem bleibt die Reihenfolge von Lieferadressen und Belegpositionen erhalten; bestehende Zahlungsarten und Quittungen wurden soweit möglich repariert.
 
 ## Veröffentlichung
 

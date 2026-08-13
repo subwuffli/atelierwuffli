@@ -14,6 +14,9 @@ insert into public.erp_meta (id) values ('main') on conflict do nothing;
 create table if not exists public.company_settings (
   id text primary key default 'main' check (id = 'main'),
   name text not null default '', address text not null default '', iban text not null default '',
+  first_name text not null default '', company_name text not null default '',
+  street text not null default '', postal_city text not null default '',
+  bank_name text not null default '', bank_address text not null default '', mwst_number text not null default '',
   payment_days integer not null default 30 check (payment_days >= 0),
   logo text not null default '', order_text text not null default '', invoice_text text not null default '',
   updated_at timestamptz not null default now()
@@ -61,6 +64,7 @@ create table if not exists public.invoices (
 create index if not exists invoices_customer_idx on public.invoices(customer_id);
 create index if not exists invoices_status_idx on public.invoices(status, archived);
 alter table public.invoices add column if not exists paid_date date;
+alter table public.invoices add column if not exists payment_method text not null default '';
 
 create table if not exists public.invoice_items (
   id uuid primary key default gen_random_uuid(), invoice_id uuid not null references public.invoices(id) on delete cascade,
