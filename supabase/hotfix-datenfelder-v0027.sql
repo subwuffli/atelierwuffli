@@ -70,8 +70,8 @@ begin
   if p_expected_revision is not null and current_revision <> p_expected_revision then
     raise exception 'CONFLICT: Daten wurden zwischenzeitlich von einem anderen Benutzer geaendert';
   end if;
-  delete from receipts; delete from expenses; delete from invoice_items; delete from invoices;
-  delete from order_items; delete from orders; delete from delivery_addresses; delete from customers;
+  delete from receipts where true; delete from expenses where true; delete from invoice_items where true; delete from invoices where true;
+  delete from order_items where true; delete from orders where true; delete from delivery_addresses where true; delete from customers where true;
 
   update company_settings set
     first_name=coalesce(p_data#>>'{settings,firstName}',''), company_name=coalesce(p_data#>>'{settings,companyName}',''),
