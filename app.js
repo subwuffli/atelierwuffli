@@ -75,6 +75,17 @@ function setTitle(t){$('#page-title').textContent=t}
 function modal(title,html){$('#modal-title').textContent=title;$('#modal-body').innerHTML=html;$('#modal').showModal()}
 async function closeModal(){await releaseCurrentEditLock();if($('#modal').open)$('#modal').close();if(remoteRevision>state.revision&&!isSaving)await reloadCloudData()}
 function fields(obj,names){return names.map(([key,label,type='text',span=false,extra=''])=>`<label class="${span?'span-2':''}">${label}<input name="${key}" type="${type}" value="${esc(obj?.[key]||'')}" ${extra}></label>`).join('')}
+function salutationSelect(value='',id=''){
+  const normalized=String(value||'').trim().toLowerCase(),selected=normalized==='frau'||normalized==='sie'?'Sie':normalized==='herr'?'Herr':normalized==='divers'?'Divers':'';
+  return `<select ${id?`id="${id}"`:'name="salutation"'}><option value="">Bitte auswählen</option>${['Herr','Sie','Divers'].map(option=>`<option value="${option}" ${selected===option?'selected':''}>${option}</option>`).join('')}</select>`
+}
+function customerGreeting(document){
+  const snapshot=document?.customerSnapshot||{},customer=state.customers.find(entry=>entry.id===document?.customerId),salutation=String(snapshot.salutation||customer?.salutation||'').trim().toLowerCase(),firstName=String(snapshot.firstName||customer?.firstName||'').trim(),lastName=String(snapshot.lastName||customer?.lastName||'').trim(),name=firstName||lastName||String(snapshot.name||'').trim();
+  if(!name)return 'Liebe Kundin, lieber Kunde,';
+  if(salutation==='herr')return `Lieber ${name},`;
+  if(salutation==='sie'||salutation==='frau')return `Liebe ${name},`;
+  return `Guten Tag ${name},`
+}
 function activeCustomers(){return state.customers.filter(c=>!c.archived)}
 async function nextNumber(prefix,d=today()){const {data,error}=await supabaseClient.rpc('next_document_number',{p_prefix:prefix,p_date:d});if(error)throw error;return data}
 async function nextCustomerNumber(){const {data,error}=await supabaseClient.rpc('next_customer_number');if(error)throw error;return data}
@@ -415,6 +426,8 @@ customerForm=async function(id){
     try{state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO}catch(error){alert(`Aktuelle Kundendaten konnten nicht geladen werden: ${error.message}`);return}
   }
   originalCustomerForm(id);
+  const salutationInput=$('#customer-form input[name="salutation"]');
+  if(salutationInput)salutationInput.outerHTML=salutationSelect(salutationInput.value);
 };
 const originalOrderForm=orderForm;
 orderForm=async function(id){
@@ -442,6 +455,7 @@ orderForm=async function(id){
     const customerField=form.customerId.closest('label');
     customerField?.insertAdjacentHTML('beforeend','<button type="button" id="new-customer-inline" class="text-button">Neuen Kunden erfassen</button>');
     customerField?.insertAdjacentHTML('afterend',`<div id="new-customer-panel" class="span-2 inline-create-panel hidden"><div class="inline-create-head"><strong>Neuen Kunden erfassen</strong><button type="button" class="text-button" id="cancel-new-customer">Schliessen</button></div><div class="form-grid compact-grid"><label>Firma<input id="inline-company"></label><label>Anrede<input id="inline-salutation"></label><label>Vorname<input id="inline-first-name"></label><label>Nachname<input id="inline-last-name"></label><label>E-Mail<input id="inline-email" type="email"></label><label>Telefon<input id="inline-phone" type="tel"></label><label>Strasse / Rechnungsadresse<input id="inline-street"></label><label>PLZ<input id="inline-zip"></label><label>Ort<input id="inline-city"></label></div><div id="inline-customer-error" class="error small"></div><div class="actions inline-create-actions"><button type="button" class="primary" id="save-new-customer">Kunden speichern und auswählen</button></div></div>`);
+    $('#inline-salutation').outerHTML=salutationSelect('','inline-salutation');
     const customerPanel=$('#new-customer-panel'),toggleCustomerPanel=show=>customerPanel.classList.toggle('hidden',!show);
     $('#new-customer-inline').onclick=()=>toggleCustomerPanel(true);$('#cancel-new-customer').onclick=()=>toggleCustomerPanel(false);
     $('#save-new-customer').onclick=async()=>{const button=$('#save-new-customer'),error=$('#inline-customer-error'),values={company:$('#inline-company').value.trim(),salutation:$('#inline-salutation').value.trim(),firstName:$('#inline-first-name').value.trim(),lastName:$('#inline-last-name').value.trim(),email:$('#inline-email').value.trim(),phone:$('#inline-phone').value.trim(),street:$('#inline-street').value.trim(),zip:$('#inline-zip').value.trim(),city:$('#inline-city').value.trim()};if(!values.company&&!values.firstName&&!values.lastName){error.textContent='Bitte Firma oder Vor- und Nachname eingeben.';return}if(!values.street){error.textContent='Bitte die Rechnungsadresse eingeben.';return}const highest=state.customers.reduce((max,customer)=>Math.max(max,Number(String(customer.number||'').match(/\d+/)?.[0]||0)),0),customer={...values,id:uid(),number:`KD-${String(highest+1).padStart(4,'0')}`,notes:'',deliveries:[],archived:false,createdAt:new Date().toISOString()};button.disabled=true;button.textContent='Kunde wird gespeichert …';error.textContent='';try{state.customers.push(customer);await save();form.customerId.innerHTML=customerOptions(customer.id);form.customerId.value=customer.id;form.customerId.dispatchEvent(new Event('change'));toggleCustomerPanel(false);notice(`Kunde ${customerName(customer)} wurde gespeichert und ausgewählt.`)}catch(saveError){state.customers=state.customers.filter(x=>x.id!==customer.id);error.textContent=saveError.message||'Der Kunde konnte nicht gespeichert werden.'}finally{button.disabled=false;button.textContent='Kunden speichern und auswählen'}};
@@ -492,6 +506,7 @@ async function pdfDocument(type,id){
   const invoice=state.invoices.find(x=>x.id===id),d=type==='order'?state.orders.find(x=>x.id===id):type==='receipt'?invoice?.receipt:invoice;if(!d)return;
   if(!window.jspdf?.jsPDF){alert('Die PDF-Funktion konnte nicht geladen werden. Bitte Internetverbindung prüfen und die Seite neu laden.');return}
   const {jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4'}),s=state.settings,isInv=type==='invoice',isReceipt=type==='receipt';
+  const pdfText=doc.text.bind(doc);doc.text=(text,...args)=>pdfText(text==='Liebe Kundin, lieber Kunde,'?customerGreeting(d):text,...args);
   {
     const rose=[247,243,241],roseStrong=[205,198,194],ink=[54,47,52],muted=[105,86,94];
     const decorate=()=>{doc.setFillColor(255,255,255);doc.rect(0,0,210,297,'F')};
@@ -534,6 +549,7 @@ printDocument=async function(type,id){
   const fulfil=type==='order'?`<p><strong>${esc(d.fulfilment)}</strong> am ${date(d.fulfilmentDate)}</p>`:'';
   const printLogo=s.logo?await preparePdfLogo(s.logo).catch(()=>s.logo):'',companyHtml=[...businessIdentityLines(s),...businessAddressLines(s)].filter(Boolean).map(esc).join('<br>'),bankHtml=[s.bankName,...String(s.bankAddress||'').split(/\r?\n/).filter(Boolean),s.iban?`IBAN: ${s.iban}`:''].filter(Boolean).map(esc).join('<br>'),info=isReceipt?`<strong>Quittungsinformationen</strong><br>${companyHtml}<br>Rechnung: ${esc(d.invoiceNumber)}<br>Bezahlt am ${date(d.date)}<br>Zahlungsart: ${esc(d.paymentMethod||'–')}`:isInv?`<strong>Rechnungsinformationen</strong><br>${companyHtml}<br>Zahlbar bis ${date(d.dueDate)}<br>Referenz: ${esc(d.number)}${bankHtml?`<br><br><strong>Bankinformationen</strong><br>${bankHtml}`:''}`:`<strong>Auftragsinformationen</strong><br>${companyHtml}<br>${esc(d.fulfilment)} am ${date(d.fulfilmentDate)}`;
   const overlay=document.createElement('div');overlay.id='mobile-print-view';overlay.className='mobile-print-view';overlay.innerHTML=`<div class="print-controls"><button class="secondary" id="close-print">Zurück zur App</button><button class="primary" id="start-print">Drucken / als PDF speichern</button></div><div class="print-sheet"><header><div>${printLogo?`<img src="${printLogo}">`:''}</div><div><strong>${esc(d.customerSnapshot.name)}</strong><br>${esc(d.customerSnapshot.billing.street||'')}<br>${esc([d.customerSnapshot.billing.zip,d.customerSnapshot.billing.city].filter(Boolean).join(' '))}</div></header><h1>${isReceipt?'Quittung':isInv?'Rechnung':'Auftrag'}</h1><p>Nummer: ${esc(d.number)}<br>Datum: ${date(d.date)}${isReceipt?`<br>Rechnung: ${esc(d.invoiceNumber)}<br>Auftrag: ${esc(d.orderNumber||'–')}`:''}</p>${fulfil}<table><thead><tr><th>Beschreibung</th><th>Menge</th><th>Einzelpreis</th><th>Betrag</th></tr></thead><tbody>${rows}</tbody></table><p class="total">Gesamtbetrag: ${money(d.total)}</p><div class="footer"><p>${info}</p><p class="thanks">Vielen Dank!</p></div></div>`;
+  if(!isReceipt)overlay.querySelector('h1')?.insertAdjacentHTML('afterend',`<p class="document-greeting">${esc(customerGreeting(d))}</p>`);
   document.body.appendChild(overlay);$('#close-print').onclick=()=>overlay.remove();$('#start-print').onclick=()=>window.print();
 };
 renderCustomers=renderCloudCustomers;
