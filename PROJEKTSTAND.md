@@ -2,7 +2,7 @@
 
 Stand: 12. August 2026
 
-Aktuelle App-Version: `V0.0.24`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
+Aktuelle App-Version: `V0.0.25`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
 
 > Architekturänderung: Supabase ist nun die einzige Datenquelle. Die früher dokumentierte lokale IndexedDB-Speicherung ist nicht mehr aktuell.
 
@@ -47,6 +47,8 @@ V0.0.22: Die PDF-Formulare verwenden die neue Anordnung mit Logo rechts, kompakt
 V0.0.23: Rechnungsinformationen wurden in Name, Firma, Strasse sowie PLZ/Ort aufgeteilt. Bankinformationen und eine MWST-Nummer für die spätere Verwendung wurden ergänzt. PDFs verwenden die neuen Geschäfts- und Bankdaten; Quittungen zeigen zusätzlich die Zahlungsart und führen die Firma vor dem Namen auf.
 
 V0.0.24: Oberhalb von „Neu laden“ zeigt Supabase Realtime Presence die aktuell verbundenen ERP-Benutzer, ihren Aktivitätsstatus und den geöffneten Bereich an. Mehrere Sitzungen desselben Benutzers werden zusammengefasst.
+
+V0.0.25: Gleichzeitige Anmeldungen desselben Benutzers werden nach Gerät getrennt angezeigt. Mehrere Browser-Tabs auf demselben Gerät bleiben zu einem Eintrag zusammengefasst.
 
 ## Veröffentlichung
 
