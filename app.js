@@ -88,10 +88,14 @@ function customerGreeting(document){
 }
 async function deliverPdf(doc,fileName){
   const blob=doc.output('blob'),file=new File([blob],fileName,{type:'application/pdf'}),mobile=window.matchMedia?.('(pointer: coarse)').matches||window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;
-  if(mobile&&navigator.share&&navigator.canShare?.({files:[file]})){
-    try{await navigator.share({files:[file],title:fileName});return}catch(error){if(error?.name==='AbortError')return;console.warn('PDF konnte nicht direkt geteilt werden:',error)}
+  if(mobile){
+    const blobUrl=URL.createObjectURL(blob),canShare=Boolean(navigator.share&&navigator.canShare?.({files:[file]})),overlay=document.createElement('div');overlay.className='pdf-preview-view';overlay.innerHTML=`<div class="pdf-preview-controls"><button type="button" class="secondary" data-pdf-close>Schliessen</button><strong>${esc(fileName)}</strong><button type="button" class="primary" data-pdf-action>${canShare?'PDF teilen':'PDF herunterladen'}</button></div><iframe title="PDF-Vorschau ${esc(fileName)}" src="${blobUrl}"></iframe>`;
+    document.body.appendChild(overlay);
+    const close=()=>{overlay.remove();URL.revokeObjectURL(blobUrl)};
+    overlay.querySelector('[data-pdf-close]').onclick=close;
+    overlay.querySelector('[data-pdf-action]').onclick=async()=>{if(!canShare){doc.save(fileName);return}try{await navigator.share({files:[file],title:fileName})}catch(error){if(error?.name!=='AbortError'){console.warn('PDF konnte nicht direkt geteilt werden:',error);doc.save(fileName)}}};
+    return
   }
-  if(mobile){doc.save(fileName);return}
   const blobUrl=URL.createObjectURL(blob),opened=window.open(blobUrl,'_blank');if(!opened)doc.save(fileName);setTimeout(()=>URL.revokeObjectURL(blobUrl),60000)
 }
 function activeCustomers(){return state.customers.filter(c=>!c.archived)}

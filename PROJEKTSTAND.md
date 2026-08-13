@@ -2,7 +2,7 @@
 
 Stand: 12. August 2026
 
-Aktuelle App-Version: `V0.0.30`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
+Aktuelle App-Version: `V0.0.31`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
 
 > Architekturänderung: Supabase ist nun die einzige Datenquelle. Die früher dokumentierte lokale IndexedDB-Speicherung ist nicht mehr aktuell.
 
@@ -59,6 +59,8 @@ V0.0.28: Die Kundenanrede ist eine feste Auswahl (Herr, Sie, Divers), wird in Su
 V0.0.29: Die zusätzliche Absender-Kopfzeile oben links wurde aus allen PDF-Formularen entfernt.
 
 V0.0.30: Auf Mobilgeräten werden erzeugte PDFs als native PDF-Dateien an die Teilen-Funktion übergeben. Unterstützt das Gerät dies nicht, wird die Datei heruntergeladen, statt einen temporären Link zu teilen.
+
+V0.0.31: Auf Mobilgeräten erscheint vor dem nativen Teilen wieder eine PDF-Vorschau mit den Schaltflächen „Schliessen“ und „PDF teilen“.
 
 ## Veröffentlichung
 
