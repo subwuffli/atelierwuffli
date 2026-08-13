@@ -4,7 +4,7 @@ const SUPABASE_URL='https://johkbmlozygtfjsqfkdu.supabase.co';
 const SUPABASE_KEY='sb_publishable_DGpxSu1ppS0fY7nbE75RSg_rI7G8UAb';
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
-let state,currentView='dashboard',realtimeChannel=null,remoteRevision=0,isSaving=false,customerSort='number-asc',orderSort='number-desc',invoiceSort='number-desc',receiptSort='number-desc',financeMonth=new Date().toISOString().slice(0,7),activeEditLock=null,lockHeartbeat=null;
+let state,currentView='dashboard',realtimeChannel=null,presenceChannel=null,presenceHeartbeat=null,presenceUser=null,lastUserActivity=Date.now(),lastPresenceTrack=0,remoteRevision=0,isSaving=false,customerSort='number-asc',orderSort='number-desc',invoiceSort='number-desc',receiptSort='number-desc',financeMonth=new Date().toISOString().slice(0,7),activeEditLock=null,lockHeartbeat=null;
 const EDIT_SESSION_TOKEN=crypto.randomUUID();
 const blankState=()=>({version:2,revision:0,settings:{firstName:'',companyName:'',street:'',postalCity:'',bankName:'',bankAddress:'',iban:'',mwstNumber:'',paymentDays:30,logo:'',orderText:'',invoiceText:''},customers:[],orders:[],invoices:[],expenses:[],lastExport:null});
 const uid=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`;
@@ -120,8 +120,16 @@ function unlockApp(){
   $('#lock-screen').classList.add('hidden');
   $('#app').classList.remove('hidden');
   subscribeToCloudChanges();
+  startUserPresence().catch(error=>console.warn('Benutzerstatus konnte nicht gestartet werden:',error));
   render('dashboard');
 }
+
+const viewLabel=view=>({dashboard:'Übersicht',appointments:'Termine',customers:'Kunden',orders:'Aufträge',invoices:'Rechnungen',receipts:'Quittungen',expenses:'Ausgaben',income:'Einnahmen',settings:'Einstellungen'}[view]||view);
+function presencePayload(){return{sessionId:EDIT_SESSION_TOKEN,userId:presenceUser?.id||EDIT_SESSION_TOKEN,email:presenceUser?.email||'Unbekannter Benutzer',name:presenceUser?.user_metadata?.full_name||presenceUser?.user_metadata?.name||presenceUser?.email?.split('@')[0]||'Benutzer',lastActive:new Date(lastUserActivity).toISOString(),view:currentView}}
+async function trackUserPresence(force=false){if(!presenceChannel||!presenceUser)return;const now=Date.now();if(!force&&now-lastPresenceTrack<12000)return;lastPresenceTrack=now;await presenceChannel.track(presencePayload())}
+function renderActiveUsers(){const list=$('#active-users-list'),count=$('#active-users-count');if(!list||!count)return;const raw=Object.values(presenceChannel?.presenceState?.()||{}).flat(),users=new Map();raw.forEach(entry=>{const key=entry.userId||entry.email||entry.presence_ref,previous=users.get(key);if(!previous||String(entry.lastActive||'')>String(previous.lastActive||''))users.set(key,entry)});const entries=[...users.values()].sort((a,b)=>String(a.name||a.email).localeCompare(String(b.name||b.email),'de')),now=Date.now();count.textContent=String(entries.length);list.innerHTML=entries.length?entries.map(user=>{const inactive=now-new Date(user.lastActive||0).getTime()>120000,label=user.name||user.email||'Benutzer',detail=user.email&&user.email!==label?user.email:'';return`<div class="active-user" title="${esc(detail||label)}"><span class="presence-dot ${inactive?'inactive':'online'}"></span><span><strong>${esc(label)}</strong>${detail?`<small>${esc(detail)}</small>`:''}<small>${inactive?'Inaktiv':'Online'}${user.view?` · ${esc(viewLabel(user.view))}`:''}</small></span></div>`}).join(''):'<span class="active-users-empty">Niemand online</span>'}
+async function startUserPresence(){if(presenceChannel)return;const {data:{user}}=await supabaseClient.auth.getUser();if(!user)return;presenceUser=user;presenceChannel=supabaseClient.channel('erp-active-users',{config:{presence:{key:EDIT_SESSION_TOKEN}}}).on('presence',{event:'sync'},renderActiveUsers).on('presence',{event:'join'},renderActiveUsers).on('presence',{event:'leave'},renderActiveUsers).subscribe(async status=>{if(status==='SUBSCRIBED'){await trackUserPresence(true);renderActiveUsers()}});presenceHeartbeat=setInterval(()=>{trackUserPresence(true).catch(()=>{});renderActiveUsers()},60000)}
+async function stopUserPresence(){if(presenceHeartbeat){clearInterval(presenceHeartbeat);presenceHeartbeat=null}if(presenceChannel){await presenceChannel.untrack().catch(()=>{});await supabaseClient.removeChannel(presenceChannel);presenceChannel=null}presenceUser=null;renderActiveUsers()}
 
 function bindGlobal(){
   $('#unlock-form').addEventListener('submit',async e=>{
@@ -149,6 +157,7 @@ function bindGlobal(){
 
   $('#lock-button').onclick=async()=>{
     await releaseCurrentEditLock();
+    await stopUserPresence();
     if(realtimeChannel){await supabaseClient.removeChannel(realtimeChannel);realtimeChannel=null}
     await supabaseClient.auth.signOut();
     state=blankState();
@@ -156,6 +165,9 @@ function bindGlobal(){
   };
 
   $('#menu-button').onclick=()=>$('.sidebar').classList.toggle('open');
+  $('#active-users-toggle').onclick=()=>{const panel=$('#active-users'),collapsed=panel.classList.toggle('collapsed');$('#active-users-toggle').setAttribute('aria-expanded',String(!collapsed))};
+  ['pointerdown','keydown','input','touchstart'].forEach(eventName=>document.addEventListener(eventName,()=>{lastUserActivity=Date.now();trackUserPresence().catch(()=>{})},{passive:true}));
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden){lastUserActivity=Date.now();trackUserPresence(true).catch(()=>{})}});
 
   $('#nav').onclick=e=>{
     const b=e.target.closest('[data-view]');
@@ -173,7 +185,7 @@ function bindGlobal(){
 }
 
 
-function render(view){currentView=view;$('#content').dataset.view=view;$$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));$('.sidebar').classList.remove('open');({dashboard:renderDashboard,appointments:renderAppointments,customers:renderCloudCustomers,orders:renderSortableOrders,invoices:renderSortableInvoices,receipts:renderReceipts,expenses:renderExpenses,income:renderIncome,settings:renderCloudSettings}[view])()}
+function render(view){currentView=view;trackUserPresence(true).catch(()=>{});$('#content').dataset.view=view;$$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));$('.sidebar').classList.remove('open');({dashboard:renderDashboard,appointments:renderAppointments,customers:renderCloudCustomers,orders:renderSortableOrders,invoices:renderSortableInvoices,receipts:renderReceipts,expenses:renderExpenses,income:renderIncome,settings:renderCloudSettings}[view])()}
 
 function renderDashboard(){setTitle('Übersicht');const open=state.invoices.filter(i=>i.status==='Offen'&&!i.archived);$('#content').innerHTML=`<div class="grid stats"><div class="card stat"><span class="muted">Aktive Kunden</span><strong>${activeCustomers().length}</strong></div><div class="card stat"><span class="muted">Aufträge in Arbeit</span><strong>${state.orders.filter(o=>o.status==='In Arbeit'&&!o.archived).length}</strong></div><div class="card stat"><span class="muted">Offene Rechnungen</span><strong>${open.length}</strong></div><div class="card stat"><span class="muted">Offener Betrag</span><strong>${money(open.reduce((s,i)=>s+i.total,0))}</strong></div></div><div class="section-head"><h2>Schnellstart</h2></div><div class="actions"><button class="primary" onclick="customerForm()">Neuer Kunde</button><button class="secondary" onclick="orderForm()">Neuer Auftrag</button><button class="secondary" onclick="exportData()">Sicherung exportieren</button></div><div class="section-head"><h2>Letzte Aufträge</h2></div>${ordersTable(state.orders.filter(o=>!o.archived).slice(-5).reverse())}`}
 function calendarWeek(value){const d=new Date(`${value}T12:00:00`),day=d.getDay()||7;d.setDate(d.getDate()+4-day);const year=d.getFullYear(),start=new Date(year,0,1),week=Math.ceil((((d-start)/86400000)+1)/7);return{year,week}}

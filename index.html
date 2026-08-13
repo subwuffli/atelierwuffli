@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#6d3f2b">
   <title>Atelier Wuffli ERP</title>
-  <link rel="stylesheet" href="styles.css?v=0.0.22">
+  <link rel="stylesheet" href="styles.css?v=0.0.24">
 </head>
 <body>
   <div id="lock-screen" class="lock-screen">
@@ -44,8 +44,12 @@
         <button data-view="income">Einnahmen</button>
         <button data-view="settings">Einstellungen</button>
       </nav>
+      <section id="active-users" class="active-users" aria-live="polite">
+        <button id="active-users-toggle" class="active-users-toggle" type="button" aria-expanded="true"><span>Aktive Benutzer</span><strong id="active-users-count">0</strong></button>
+        <div id="active-users-list" class="active-users-list"><span class="active-users-empty">Verbindung wird aufgebaut …</span></div>
+      </section>
       <button id="reload-button" class="secondary reload-button">Neu laden</button>
-      <div id="app-version" class="app-version" aria-label="App-Version">V0.0.23</div>
+      <div id="app-version" class="app-version" aria-label="App-Version">V0.0.24</div>
       <button id="lock-button" class="secondary">Sperren</button>
     </aside>
     <main>
@@ -59,6 +63,6 @@
   <input id="import-file" type="file" accept="application/json,.json" hidden>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
-  <script src="app.js?v=0.0.22"></script>
+  <script src="app.js?v=0.0.24"></script>
 </body>
 </html>
