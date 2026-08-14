@@ -59,6 +59,7 @@ async function save(){
   state=normalizeState(state);
   isSaving=true;
   try{
+    await assertCurrentEditLock();
     await saveToSupabase();
   }catch(error){
     const details=[error?.message,error?.details,error?.hint,error?.code].filter(Boolean).join(' | ');
@@ -192,7 +193,8 @@ function bindGlobal(){
   $('#menu-button').onclick=()=>$('.sidebar').classList.toggle('open');
   $('#active-users-toggle').onclick=()=>{const panel=$('#active-users'),collapsed=panel.classList.toggle('collapsed');$('#active-users-toggle').setAttribute('aria-expanded',String(!collapsed))};
   ['pointerdown','keydown','input','touchstart'].forEach(eventName=>document.addEventListener(eventName,()=>{lastUserActivity=Date.now();trackUserPresence().catch(()=>{})},{passive:true}));
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden){lastUserActivity=Date.now();trackUserPresence(true).catch(()=>{})}});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden){lastUserActivity=Date.now();trackUserPresence(true).catch(()=>{});renewCurrentEditLock().catch(()=>{})}});
+  window.addEventListener('pagehide',()=>{releaseCurrentEditLock().catch(()=>{})});
 
   $('#nav').onclick=e=>{
     const b=e.target.closest('[data-view]');
@@ -210,7 +212,7 @@ function bindGlobal(){
 }
 
 
-function render(view){currentView=view;trackUserPresence(true).catch(()=>{});$('#content').dataset.view=view;$$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));$('.sidebar').classList.remove('open');({dashboard:renderDashboard,appointments:renderAppointments,customers:renderCloudCustomers,orders:renderSortableOrders,invoices:renderSortableInvoices,receipts:renderReceipts,expenses:renderExpenses,income:renderIncome,settings:renderCloudSettings}[view])()}
+function render(view){if(activeEditLock?.type==='settings'&&view!=='settings')releaseCurrentEditLock();currentView=view;trackUserPresence(true).catch(()=>{});$('#content').dataset.view=view;$$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));$('.sidebar').classList.remove('open');({dashboard:renderDashboard,appointments:renderAppointments,customers:renderCloudCustomers,orders:renderSortableOrders,invoices:renderSortableInvoices,receipts:renderReceipts,expenses:renderExpenses,income:renderIncome,settings:renderCloudSettings}[view])()}
 
 function renderDashboard(){setTitle('Übersicht');const open=state.invoices.filter(i=>i.status==='Offen'&&!i.archived);$('#content').innerHTML=`<div class="grid stats"><div class="card stat"><span class="muted">Aktive Kunden</span><strong>${activeCustomers().length}</strong></div><div class="card stat"><span class="muted">Aufträge in Arbeit</span><strong>${state.orders.filter(o=>o.status==='In Arbeit'&&!o.archived).length}</strong></div><div class="card stat"><span class="muted">Offene Rechnungen</span><strong>${open.length}</strong></div><div class="card stat"><span class="muted">Offener Betrag</span><strong>${money(open.reduce((s,i)=>s+i.total,0))}</strong></div></div><div class="section-head"><h2>Schnellstart</h2></div><div class="actions"><button class="primary" onclick="customerForm()">Neuer Kunde</button><button class="secondary" onclick="orderForm()">Neuer Auftrag</button><button class="secondary" onclick="exportData()">Sicherung exportieren</button></div><div class="section-head"><h2>Letzte Aufträge</h2></div>${ordersTable(state.orders.filter(o=>!o.archived).slice(-5).reverse())}`}
 function calendarWeek(value){const d=new Date(`${value}T12:00:00`),day=d.getDay()||7;d.setDate(d.getDate()+4-day);const year=d.getFullYear(),start=new Date(year,0,1),week=Math.ceil((((d-start)/86400000)+1)/7);return{year,week}}
@@ -395,19 +397,53 @@ async function importCloudData(e){
 }
 
 async function acquireEditLock(type,id){
+  if(activeEditLock?.type===type&&activeEditLock?.id===id&&!activeEditLock.lost)return true;
   await releaseCurrentEditLock();
-  const {data,error}=await supabaseClient.rpc('acquire_edit_lock_v2',{p_entity_type:type,p_entity_id:id,p_session_token:EDIT_SESSION_TOKEN});
+  const {data,error}=await supabaseClient.rpc('acquire_edit_lock_v3',{p_entity_type:type,p_entity_id:id,p_session_token:EDIT_SESSION_TOKEN});
   if(error)throw error;if(!data)return false;
-  activeEditLock={type,id};
-  lockHeartbeat=setInterval(async()=>{if(activeEditLock)await supabaseClient.rpc('acquire_edit_lock_v2',{p_entity_type:activeEditLock.type,p_entity_id:activeEditLock.id,p_session_token:EDIT_SESSION_TOKEN})},60000);
+  activeEditLock={type,id,heartbeatFailures:0,lost:false};
+  lockHeartbeat=setInterval(renewCurrentEditLock,30000);
   return true;
+}
+
+async function renewCurrentEditLock(){
+  const lock=activeEditLock;if(!lock||lock.lost)return;
+  try{
+    const {data,error}=await supabaseClient.rpc('acquire_edit_lock_v3',{p_entity_type:lock.type,p_entity_id:lock.id,p_session_token:EDIT_SESSION_TOKEN});
+    if(error||!data)throw error||new Error('Sperre wurde von Supabase nicht bestätigt.');
+    lock.heartbeatFailures=0;
+  }catch(error){
+    lock.heartbeatFailures=(lock.heartbeatFailures||0)+1;
+    console.error('Bearbeitungssperre konnte nicht erneuert werden:',error);
+    if(lock.heartbeatFailures>=2)markEditLockLost();
+  }
+}
+
+function markEditLockLost(){
+  const lock=activeEditLock;if(!lock||lock.lost)return;lock.lost=true;
+  if(lockHeartbeat){clearInterval(lockHeartbeat);lockHeartbeat=null}
+  const form=$('#modal form')||$('#settings-form');
+  form?.querySelectorAll('input,select,textarea,button').forEach(control=>control.disabled=true);
+  const closeButton=$('#modal .modal-shell>header button');if(closeButton)closeButton.disabled=false;
+  alert('Die Bearbeitungssperre konnte nicht bestätigt werden. Das Formular wurde schreibgeschützt. Bitte schliessen und neu öffnen.');
+}
+
+async function assertCurrentEditLock(){
+  const lock=activeEditLock;if(!lock)return;
+  if(lock.lost)throw new Error('Die Bearbeitungssperre ist nicht mehr gültig. Bitte das Formular neu öffnen.');
+  const {data,error}=await supabaseClient.rpc('owns_edit_lock_v3',{p_entity_type:lock.type,p_entity_id:lock.id,p_session_token:EDIT_SESSION_TOKEN});
+  if(error||!data){markEditLockLost();throw error||new Error('Die Bearbeitungssperre ist abgelaufen. Bitte das Formular neu öffnen.')}
 }
 
 async function releaseCurrentEditLock(){
   if(lockHeartbeat){clearInterval(lockHeartbeat);lockHeartbeat=null}
-  const lock=activeEditLock;activeEditLock=null;if(!lock)return;
-  const {error}=await supabaseClient.rpc('release_edit_lock_v2',{p_entity_type:lock.type,p_entity_id:lock.id,p_session_token:EDIT_SESSION_TOKEN});
-  if(error)console.error('Bearbeitungssperre konnte nicht freigegeben werden:',error);
+  const lock=activeEditLock;if(!lock)return;activeEditLock=null;
+  let lastError;
+  for(let attempt=0;attempt<3;attempt++){
+    try{const {error}=await supabaseClient.rpc('release_edit_lock_v3',{p_entity_type:lock.type,p_entity_id:lock.id,p_session_token:EDIT_SESSION_TOKEN});if(error)throw error;return}
+    catch(error){lastError=error;if(attempt<2)await new Promise(resolve=>setTimeout(resolve,250*(attempt+1)))}
+  }
+  console.error('Bearbeitungssperre konnte nicht freigegeben werden und läuft automatisch ab:',lastError);
 }
 
 function repairEncoding(value){
@@ -432,7 +468,7 @@ customerForm=async function(id){
       state.settings.logo||=DEFAULT_LOGO;
     }catch(error){
       console.error('Bearbeitungssperre nicht verfügbar:',error);
-      alert(`Bearbeitungssperre nicht verfügbar: ${error?.message||'Unbekannter Fehler'}. Die Bearbeitung bleibt möglich; beim Speichern wird auf Konflikte geprüft.`);
+      await releaseCurrentEditLock();alert(`Bearbeitung nicht möglich: Die Sperre konnte nicht bestätigt werden (${error?.message||'Unbekannter Fehler'}). Bitte versuche es erneut.`);return;
     }
   }else{
     try{state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO}catch(error){alert(`Aktuelle Kundendaten konnten nicht geladen werden: ${error.message}`);return}
@@ -449,7 +485,7 @@ orderForm=async function(id){
       state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO;
     }catch(error){
       console.error('Bearbeitungssperre nicht verfügbar:',error);
-      alert(`Bearbeitungssperre nicht verfügbar: ${error?.message||'Unbekannter Fehler'}. Die Bearbeitung bleibt möglich; beim Speichern wird auf Konflikte geprüft.`);
+      await releaseCurrentEditLock();alert(`Bearbeitung nicht möglich: Die Sperre konnte nicht bestätigt werden (${error?.message||'Unbekannter Fehler'}). Bitte versuche es erneut.`);return;
     }
   }else{
     try{state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO}catch(error){alert(`Aktuelle Auftragsdaten konnten nicht geladen werden: ${error.message}`);return}
@@ -459,8 +495,8 @@ orderForm=async function(id){
   if(id&&form){
     const originalSubmit=form.onsubmit;
     form.onsubmit=async event=>{
-      const cloudSave=save;save=async()=>{};
-      try{await originalSubmit(event);const order=state.orders.find(x=>x.id===id);syncInvoiceFromOrder(order);await cloudSave();const invoice=state.invoices.find(x=>x.id===order?.invoiceId);notice(invoice?.receipt?'Auftrag, Rechnung und Quittung aktualisiert.':order?.invoiceId?'Auftrag und verknüpfte Rechnung aktualisiert.':'Auftrag gespeichert.')}finally{save=cloudSave}
+      const cloudSave=save,cloudClose=closeModal;save=async()=>{};closeModal=async()=>{};
+      try{await originalSubmit(event);const order=state.orders.find(x=>x.id===id);syncInvoiceFromOrder(order);await cloudSave();await cloudClose();renderOrders();const invoice=state.invoices.find(x=>x.id===order?.invoiceId);notice(invoice?.receipt?'Auftrag, Rechnung und Quittung aktualisiert.':order?.invoiceId?'Auftrag und verknüpfte Rechnung aktualisiert.':'Auftrag gespeichert.')}finally{save=cloudSave;closeModal=cloudClose}
     };
   }
   if(form){
@@ -496,10 +532,30 @@ invoiceForm=async function(id){
       state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO;
     }catch(error){
       console.error('Bearbeitungssperre nicht verfügbar:',error);
-      alert(`Bearbeitungssperre nicht verfügbar: ${error?.message||'Unbekannter Fehler'}. Die Bearbeitung bleibt möglich; beim Speichern wird auf Konflikte geprüft.`);
+      await releaseCurrentEditLock();alert(`Bearbeitung nicht möglich: Die Sperre konnte nicht bestätigt werden (${error?.message||'Unbekannter Fehler'}). Bitte versuche es erneut.`);return;
     }
   }
   originalInvoiceForm(id);
+};
+const originalExpenseForm=expenseForm;
+expenseForm=async function(id){
+  if(id){
+    try{
+      if(!(await acquireEditLock('expense',id))){alert('Diese Ausgabe wird gerade auf einem anderen Gerät bearbeitet. Bitte versuche es später erneut.');return}
+      state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO;
+    }catch(error){console.error('Bearbeitungssperre nicht verfügbar:',error);await releaseCurrentEditLock();alert(`Bearbeitung nicht möglich: Die Sperre konnte nicht bestätigt werden (${error?.message||'Unbekannter Fehler'}). Bitte versuche es erneut.`);return}
+  }else{
+    try{state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO}catch(error){alert(`Aktuelle Ausgabendaten konnten nicht geladen werden: ${error.message}`);return}
+  }
+  originalExpenseForm(id);
+};
+const SETTINGS_LOCK_ID='00000000-0000-0000-0000-000000000001';
+const originalRenderCloudSettings=renderCloudSettings;
+renderCloudSettings=async function(){
+  try{
+    if(!(await acquireEditLock('settings',SETTINGS_LOCK_ID))){setTitle('Einstellungen');$('#content').innerHTML='<div class="card empty">Die Einstellungen werden gerade auf einem anderen Gerät bearbeitet. Bitte versuche es später erneut.</div>';return}
+    state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO;originalRenderCloudSettings();
+  }catch(error){console.error('Einstellungssperre nicht verfügbar:',error);await releaseCurrentEditLock();setTitle('Einstellungen');$('#content').innerHTML=`<div class="card empty">Die Einstellungen können momentan nicht sicher bearbeitet werden: ${esc(error?.message||'Unbekannter Fehler')}</div>`}
 };
 function syncInvoiceFromOrder(order){
   if(!order?.invoiceId)return;

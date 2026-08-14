@@ -2,7 +2,7 @@
 
 Stand: 12. August 2026
 
-Aktuelle App-Version: `V0.0.31`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
+Aktuelle App-Version: `V0.0.32`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
 
 > Architekturänderung: Supabase ist nun die einzige Datenquelle. Die früher dokumentierte lokale IndexedDB-Speicherung ist nicht mehr aktuell.
 
@@ -61,6 +61,8 @@ V0.0.29: Die zusätzliche Absender-Kopfzeile oben links wurde aus allen PDF-Form
 V0.0.30: Auf Mobilgeräten werden erzeugte PDFs als native PDF-Dateien an die Teilen-Funktion übergeben. Unterstützt das Gerät dies nicht, wird die Datei heruntergeladen, statt einen temporären Link zu teilen.
 
 V0.0.31: Auf Mobilgeräten erscheint vor dem nativen Teilen wieder eine PDF-Vorschau mit den Schaltflächen „Schliessen“ und „PDF teilen“.
+
+V0.0.32: Bearbeitungssperren werden vor dem Öffnen und Speichern verbindlich geprüft, alle 30 Sekunden erneuert und nach drei Minuten ohne Erneuerung automatisch freigegeben. Speichern erfolgt vor dem Entsperren; Freigaben werden bei Fehlern wiederholt. Ausgaben und Einstellungen sind ebenfalls geschützt.
 
 ## Veröffentlichung
 
