@@ -2,7 +2,7 @@
 
 Stand: 12. August 2026
 
-Aktuelle App-Version: `V0.0.35`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
+Aktuelle App-Version: `V0.0.36`. Ab jetzt wird bei jeder veröffentlichten Änderung die letzte Zahl um eins erhöht.
 
 > Architekturänderung: Supabase ist nun die einzige Datenquelle. Die früher dokumentierte lokale IndexedDB-Speicherung ist nicht mehr aktuell.
 
@@ -69,6 +69,8 @@ V0.0.33: Meldungen bei belegten Bearbeitungssperren zeigen den angemeldeten Benu
 V0.0.34: Geöffnete ERP-Sitzungen erkennen zukünftige Deployments automatisch und zeigen einen dauerhaften Hinweis zum sicheren Neustart der Sitzung an.
 
 V0.0.35: Kunden und ihre Lieferadressen werden datensatzweise und transaktional gespeichert. Andere Kunden, Aufträge, Rechnungen und Ausgaben bleiben bei einer Kundenänderung unberührt; Konflikte werden pro Kunde über dessen Änderungszeit erkannt.
+
+V0.0.36: Beim Bearbeiten eines Auftrags bleibt der zugeordnete Kunde auch dann korrekt ausgewählt, wenn dieser inzwischen archiviert wurde. Dadurch wird ebenfalls wieder dessen richtige Lieferadresse angezeigt.
 
 ## Veröffentlichung
 
