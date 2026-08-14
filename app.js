@@ -2,9 +2,10 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://johkbmlozygtfjsqfkdu.supabase.co';
 const SUPABASE_KEY='sb_publishable_DGpxSu1ppS0fY7nbE75RSg_rI7G8UAb';
+const APP_VERSION='V0.0.34';
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
-let state,currentView='dashboard',realtimeChannel=null,presenceChannel=null,presenceHeartbeat=null,presenceUser=null,lastUserActivity=Date.now(),lastPresenceTrack=0,remoteRevision=0,isSaving=false,customerSort='number-asc',orderSort='number-desc',invoiceSort='number-desc',receiptSort='number-desc',financeMonth=new Date().toISOString().slice(0,7),activeEditLock=null,lockHeartbeat=null;
+let state,currentView='dashboard',realtimeChannel=null,presenceChannel=null,presenceHeartbeat=null,versionHeartbeat=null,presenceUser=null,lastUserActivity=Date.now(),lastPresenceTrack=0,remoteRevision=0,isSaving=false,customerSort='number-asc',orderSort='number-desc',invoiceSort='number-desc',receiptSort='number-desc',financeMonth=new Date().toISOString().slice(0,7),activeEditLock=null,lockHeartbeat=null;
 let lastEditLockConflict=null;
 const EDIT_SESSION_TOKEN=crypto.randomUUID();
 const DEVICE_ID=localStorage.getItem('atelier-wuffli-device-id')||crypto.randomUUID();localStorage.setItem('atelier-wuffli-device-id',DEVICE_ID);
@@ -147,7 +148,21 @@ function unlockApp(){
   $('#app').classList.remove('hidden');
   subscribeToCloudChanges();
   startUserPresence().catch(error=>console.warn('Benutzerstatus konnte nicht gestartet werden:',error));
+  startVersionMonitor();
   render('dashboard');
+}
+
+async function checkAppVersion(){
+  try{
+    const response=await fetch(`VERSION?check=${Date.now()}`,{cache:'no-store'});if(!response.ok)return;
+    const published=(await response.text()).trim();if(published&&published!==APP_VERSION)showVersionUpdate(published);
+  }catch(error){console.warn('Versionsprüfung momentan nicht möglich:',error)}
+}
+function startVersionMonitor(){if(versionHeartbeat)return;checkAppVersion();versionHeartbeat=setInterval(checkAppVersion,60000)}
+function showVersionUpdate(published){
+  if($('#version-update'))return;
+  const banner=document.createElement('div');banner.id='version-update';banner.className='version-update';banner.innerHTML=`<div><strong>Neue ERP-Version verfügbar</strong><span>${esc(published)} wurde veröffentlicht. Bitte starte die Sitzung neu.</span></div><button type="button" class="primary">Jetzt neu starten</button>`;
+  document.body.appendChild(banner);banner.querySelector('button').onclick=async()=>{if($('#modal').open&&!confirm('Das Formular ist noch geöffnet. Nicht gespeicherte Eingaben verwerfen und die neue Version laden?'))return;banner.querySelector('button').disabled=true;await releaseCurrentEditLock();location.reload()};
 }
 
 const viewLabel=view=>({dashboard:'Übersicht',appointments:'Termine',customers:'Kunden',orders:'Aufträge',invoices:'Rechnungen',receipts:'Quittungen',expenses:'Ausgaben',income:'Einnahmen',settings:'Einstellungen'}[view]||view);
