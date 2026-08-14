@@ -2,6 +2,8 @@
 
 Aktuelle Version: **V0.0.36**
 
+Eine vollständig getrennte Testumgebung liegt unter `test/`. Einrichtung und Arbeitsablauf sind in `TESTUMGEBUNG.md` beschrieben.
+
 Bei jeder veröffentlichten Änderung wird die letzte Versionsstelle um eins erhöht (`V0.0.2`, `V0.0.3`, …). Die Version wird in der Seitenleiste oberhalb von **Sperren** angezeigt.
 
 Deutschsprachiges Mehrbenutzer-ERP für Kunden, Aufträge, Rechnungen und Quittungen. Die Anwendung wird über GitHub Pages ausgeliefert; Anmeldung und sämtliche Geschäftsdaten liegen in Supabase.

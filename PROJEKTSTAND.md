@@ -72,6 +72,8 @@ V0.0.35: Kunden und ihre Lieferadressen werden datensatzweise und transaktional 
 
 V0.0.36: Beim Bearbeiten eines Auftrags bleibt der zugeordnete Kunde auch dann korrekt ausgewählt, wenn dieser inzwischen archiviert wurde. Dadurch wird ebenfalls wieder dessen richtige Lieferadresse angezeigt.
 
+Testumgebung: Unter `/test/` liegt eine deutlich gekennzeichnete Kopie der App, die ausschliesslich das separate Supabase-Projekt `atelierwuffli-erp-test` verwendet. Änderungen können dadurch vor der Übernahme in die Live-App mit getrennten Benutzern und Daten geprüft werden.
+
 ## Veröffentlichung
 
 - Repository: https://github.com/subwuffli/atelierwuffli

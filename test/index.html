@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#6d3f2b">
+  <title>Atelier Wuffli ERP – Testumgebung</title>
+  <link rel="stylesheet" href="styles.css?v=0.0.36">
+</head>
+<body class="test-environment">
+  <div class="test-environment-banner" role="status">TESTUMGEBUNG – KEINE ECHTEN DATEN</div>
+  <div id="lock-screen" class="lock-screen">
+<form id="unlock-form" class="card lock-card">
+  <p class="eyebrow">ATELIER WUFFLI</p>
+  <h1 id="lock-title">ERP anmelden</h1>
+  <p id="lock-help" class="muted">Melde dich mit deinem ERP-Benutzer an.</p>
+
+  <label>
+    E-Mail
+    <input id="email" type="email" autocomplete="username" required>
+  </label>
+
+  <label>
+    Passwort
+    <input id="password" type="password" autocomplete="current-password" required>
+  </label>
+
+  <button class="primary" type="submit">Anmelden</button>
+
+  <p id="lock-error" class="error" role="alert"></p>
+</form>
+  </div>
+
+  <div id="app" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand"><img src="assets/atelier-wuffli-logo.jpeg" alt="Atelier Wuffli"><div><strong>Atelier Wuffli</strong><small>Einfaches ERP</small></div></div>
+      <nav id="nav">
+        <button data-view="dashboard" class="active">Übersicht</button>
+        <button data-view="appointments">Termine</button>
+        <button data-view="customers">Kunden</button>
+        <button data-view="orders">Aufträge</button>
+        <button data-view="invoices">Rechnungen</button>
+        <button data-view="receipts">Quittungen</button>
+        <button data-view="expenses">Ausgaben</button>
+        <button data-view="income">Einnahmen</button>
+        <button data-view="settings">Einstellungen</button>
+      </nav>
+      <section id="active-users" class="active-users" aria-live="polite">
+        <button id="active-users-toggle" class="active-users-toggle" type="button" aria-expanded="true"><span>Aktive Benutzer</span><strong id="active-users-count">0</strong></button>
+        <div id="active-users-list" class="active-users-list"><span class="active-users-empty">Verbindung wird aufgebaut …</span></div>
+      </section>
+      <button id="reload-button" class="secondary reload-button">Neu laden</button>
+      <div id="app-version" class="app-version" aria-label="App-Version">TEST V0.0.36</div>
+      <button id="lock-button" class="secondary">Sperren</button>
+    </aside>
+    <main>
+      <header class="topbar"><button id="menu-button" aria-label="Menü">☰</button><div><p class="eyebrow">SUPABASE CLOUD-DATENBANK</p><h1 id="page-title">Übersicht</h1></div><button id="quick-export" class="secondary">Daten exportieren</button></header>
+      <div id="notice" class="notice hidden"></div>
+      <section id="content"></section>
+    </main>
+  </div>
+
+  <dialog id="modal"><div class="modal-shell"><header><h2 id="modal-title"></h2><button type="button" onclick="closeModal()" aria-label="Schliessen">×</button></header><div id="modal-body"></div></div></dialog>
+  <input id="import-file" type="file" accept="application/json,.json" hidden>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
+  <script src="app.js?v=0.0.36"></script>
+</body>
+</html>
