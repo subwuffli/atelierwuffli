@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://johkbmlozygtfjsqfkdu.supabase.co';
 const SUPABASE_KEY='sb_publishable_DGpxSu1ppS0fY7nbE75RSg_rI7G8UAb';
-const APP_VERSION='V0.0.34';
+const APP_VERSION='V0.0.35';
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
 let state,currentView='dashboard',realtimeChannel=null,presenceChannel=null,presenceHeartbeat=null,versionHeartbeat=null,presenceUser=null,lastUserActivity=Date.now(),lastPresenceTrack=0,remoteRevision=0,isSaving=false,customerSort='number-asc',orderSort='number-desc',invoiceSort='number-desc',receiptSort='number-desc',financeMonth=new Date().toISOString().slice(0,7),activeEditLock=null,lockHeartbeat=null;
@@ -72,6 +72,21 @@ async function save(){
     isSaving=false;
     if(remoteRevision>state.revision&&!$('#modal').open)await reloadCloudData();
   }
+}
+async function saveCustomerRecord(customer,expectedUpdatedAt=null,requireLock=false){
+  isSaving=true;
+  try{
+    if(requireLock)await assertCurrentEditLock();
+    const {data,error}=await supabaseClient.rpc('save_customer_v1',{p_customer:customer,p_expected_updated_at:expectedUpdatedAt||null,p_session_token:requireLock?EDIT_SESSION_TOKEN:null});
+    if(error)throw error;
+    state.revision=Number(data.revision);remoteRevision=Math.max(remoteRevision,state.revision);
+    return data.customer;
+  }catch(error){
+    const message=String(error?.message||'');
+    if(message.includes('CUSTOMER_CONFLICT'))throw new Error('Dieser Kunde wurde zwischenzeitlich geändert. Bitte schliesse das Formular und öffne ihn erneut.');
+    if(message.includes('EDIT_LOCK_LOST'))throw new Error('Die Bearbeitungssperre ist abgelaufen. Bitte schliesse das Formular und öffne ihn erneut.');
+    throw error;
+  }finally{isSaving=false}
 }
 function notice(msg){const n=$('#notice');n.textContent=msg;n.classList.remove('hidden');setTimeout(()=>n.classList.add('hidden'),3500)}
 function setTitle(t){$('#page-title').textContent=t}
@@ -296,7 +311,7 @@ async function pdfMonthlyReport(kind,month){
 
 function renderSettings(){setTitle('Einstellungen');const s=state.settings;$('#content').innerHTML=`<form id="settings-form" class="card settings-block"><h2>Rechnungsinformationen</h2><div class="form-grid">${fields(s,[['name','Name / Firma'],['iban','IBAN'],['address','Adresse','text',true]])}<label>Zahlungsfrist in Tagen<input name="paymentDays" type="number" min="0" value="${s.paymentDays}"></label><label>Logo<input id="logo-file" type="file" accept="image/png,image/jpeg,image/webp"></label>${s.logo?`<img class="logo-preview" src="${s.logo}" alt="Aktuelles Logo">`:''}<label class="span-2">Standardtext Auftrag<textarea name="orderText">${esc(s.orderText)}</textarea></label><label class="span-2">Standardtext Rechnung<textarea name="invoiceText">${esc(s.invoiceText)}</textarea></label></div><div class="form-actions"><button class="primary">Einstellungen speichern</button></div></form><div class="card settings-block"><h2>Datensicherung</h2><p class="hint">Die Daten werden in Supabase gespeichert. Dieser Browser hält zusätzlich eine lokale Sicherung für den Offline- und Notfallbetrieb.</p><div class="backup-actions"><button class="primary" onclick="exportData()">Alle Daten exportieren</button><button class="secondary" onclick="document.querySelector('#import-file').click()">Daten ersetzen / importieren</button></div><p class="small muted">Letzter Export: ${state.lastExport?new Date(state.lastExport).toLocaleString('de-CH'):'Noch nie'}</p></div><div class="card settings-block danger-zone"><h2>Lokale Sicherung</h2><p>Damit wird nur die lokale Browser-Sicherung gelöscht. Die Daten in Supabase bleiben erhalten und werden nach dem Neuladen erneut abgerufen.</p><button class="danger" onclick="resetEverything()">Lokale Sicherung zurücksetzen</button></div>`;$('#settings-form').onsubmit=async e=>{e.preventDefault();Object.assign(s,Object.fromEntries(new FormData(e.target)),{paymentDays:Number(new FormData(e.target).get('paymentDays'))});await save();notice('Einstellungen gespeichert.')};$('#logo-file').onchange=e=>{const f=e.target.files[0];if(!f)return;if(f.size>1_500_000){alert('Das Logo darf maximal 1,5 MB gross sein.');return}const r=new FileReader();r.onload=async()=>{s.logo=r.result;await save();renderSettings();notice('Logo gespeichert.')};r.readAsDataURL(f)}}
 
-async function toggleArchive(kind,id){const x=state[kind].find(x=>x.id===id);if(!x)return;if(!x.archived&&kind!=='customers'&&((kind==='orders'&&x.status!=='Abgeschlossen')||(kind==='invoices'&&x.status==='Offen'))){alert('Nur abgeschlossene Aufträge beziehungsweise bezahlte oder stornierte Rechnungen können archiviert werden.');return}x.archived=!x.archived;await save();render(currentView);notice(x.archived?'Archiviert.':'Wieder aktiviert.')}
+async function toggleArchive(kind,id){let x=state[kind].find(x=>x.id===id);if(!x)return;if(kind==='customers'){try{if(!(await acquireEditLock('customer',id))){alert(editLockConflictMessage('Dieser Kunde'));return}state=await loadFromSupabase();x=state.customers.find(customer=>customer.id===id);const expected=x.updatedAt,saved=await saveCustomerRecord({...x,archived:!x.archived},expected,true);Object.assign(x,saved);notice(x.archived?'Archiviert.':'Wieder aktiviert.')}catch(error){alert(`Kundenstatus konnte nicht gespeichert werden: ${error.message}`)}finally{await releaseCurrentEditLock()}render(currentView);return}if(!x.archived&&((kind==='orders'&&x.status!=='Abgeschlossen')||(kind==='invoices'&&x.status==='Offen'))){alert('Nur abgeschlossene Aufträge beziehungsweise bezahlte oder stornierte Rechnungen können archiviert werden.');return}x.archived=!x.archived;await save();render(currentView);notice(x.archived?'Archiviert.':'Wieder aktiviert.')}
 async function exportData(){state.lastExport=new Date().toISOString();await save();const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`atelier-wuffli-backup-${today()}.json`;a.click();URL.revokeObjectURL(a.href);if(currentView==='settings')renderSettings();notice('Datensicherung exportiert.')}
 async function importData(e){
   const f=e.target.files[0];
@@ -498,6 +513,12 @@ customerForm=async function(id){
   originalCustomerForm(id);
   const salutationInput=$('#customer-form input[name="salutation"]');
   if(salutationInput)salutationInput.outerHTML=salutationSelect(salutationInput.value);
+  const form=$('#customer-form'),existing=id?state.customers.find(customer=>customer.id===id):null,expectedUpdatedAt=existing?.updatedAt||null;
+  form.onsubmit=async event=>{
+    event.preventDefault();const submit=form.querySelector('button.primary'),values=Object.fromEntries(new FormData(form)),deliveries=[...form.querySelectorAll('#delivery-list .line-item')].map(row=>({id:uid(),label:row.querySelector('[data-d="label"]')?.value.trim()||'',street:row.querySelector('[data-d="street"]')?.value.trim()||'',city:row.querySelector('[data-d="city"]')?.value.trim()||''})),candidate={...(existing||{}),...values,id:existing?.id||uid(),number:existing?.number||'',deliveries,archived:existing?.archived||false,createdAt:existing?.createdAt||new Date().toISOString()};
+    submit.disabled=true;submit.textContent='Wird gespeichert …';
+    try{const saved=await saveCustomerRecord(candidate,expectedUpdatedAt,Boolean(existing));if(existing)Object.assign(existing,saved);else state.customers.push(saved);await closeModal();renderCloudCustomers();notice('Kunde gespeichert.')}catch(error){alert(`Kunde konnte nicht gespeichert werden: ${error.message}`)}finally{submit.disabled=false;submit.textContent='Speichern'}
+  };
 };
 const originalOrderForm=orderForm;
 orderForm=async function(id){
@@ -529,20 +550,25 @@ orderForm=async function(id){
     const customerPanel=$('#new-customer-panel'),toggleCustomerPanel=show=>customerPanel.classList.toggle('hidden',!show);
     $('#new-customer-inline').onclick=()=>toggleCustomerPanel(true);$('#cancel-new-customer').onclick=()=>toggleCustomerPanel(false);
     $('#save-new-customer').onclick=async()=>{const button=$('#save-new-customer'),error=$('#inline-customer-error'),values={company:$('#inline-company').value.trim(),salutation:$('#inline-salutation').value.trim(),firstName:$('#inline-first-name').value.trim(),lastName:$('#inline-last-name').value.trim(),email:$('#inline-email').value.trim(),phone:$('#inline-phone').value.trim(),street:$('#inline-street').value.trim(),zip:$('#inline-zip').value.trim(),city:$('#inline-city').value.trim()};if(!values.company&&!values.firstName&&!values.lastName){error.textContent='Bitte Firma oder Vor- und Nachname eingeben.';return}if(!values.street){error.textContent='Bitte die Rechnungsadresse eingeben.';return}const highest=state.customers.reduce((max,customer)=>Math.max(max,Number(String(customer.number||'').match(/\d+/)?.[0]||0)),0),customer={...values,id:uid(),number:`KD-${String(highest+1).padStart(4,'0')}`,notes:'',deliveries:[],archived:false,createdAt:new Date().toISOString()};button.disabled=true;button.textContent='Kunde wird gespeichert …';error.textContent='';try{state.customers.push(customer);await save();form.customerId.innerHTML=customerOptions(customer.id);form.customerId.value=customer.id;form.customerId.dispatchEvent(new Event('change'));toggleCustomerPanel(false);notice(`Kunde ${customerName(customer)} wurde gespeichert und ausgewählt.`)}catch(saveError){state.customers=state.customers.filter(x=>x.id!==customer.id);error.textContent=saveError.message||'Der Kunde konnte nicht gespeichert werden.'}finally{button.disabled=false;button.textContent='Kunden speichern und auswählen'}};
+    $('#save-new-customer').onclick=async()=>{
+      const button=$('#save-new-customer'),error=$('#inline-customer-error'),customer={id:uid(),number:'',company:$('#inline-company').value.trim(),salutation:$('#inline-salutation').value.trim(),firstName:$('#inline-first-name').value.trim(),lastName:$('#inline-last-name').value.trim(),email:$('#inline-email').value.trim(),phone:$('#inline-phone').value.trim(),street:$('#inline-street').value.trim(),zip:$('#inline-zip').value.trim(),city:$('#inline-city').value.trim(),notes:'',deliveries:[],archived:false,createdAt:new Date().toISOString()};
+      if(!customer.company&&!customer.firstName&&!customer.lastName){error.textContent='Bitte Firma oder Vor- und Nachname eingeben.';return}if(!customer.street){error.textContent='Bitte die Rechnungsadresse eingeben.';return}
+      button.disabled=true;button.textContent='Kunde wird gespeichert …';error.textContent='';
+      try{const saved=await saveCustomerRecord(customer);state.customers.push(saved);form.customerId.innerHTML=customerOptions(saved.id);form.customerId.value=saved.id;form.customerId.dispatchEvent(new Event('change'));toggleCustomerPanel(false);notice(`Kunde ${customerName(saved)} wurde gespeichert und ausgewählt.`)}catch(saveError){error.textContent=saveError.message||'Der Kunde konnte nicht gespeichert werden.'}finally{button.disabled=false;button.textContent='Kunden speichern und auswählen'}
+    };
     const deliveryField=$('#delivery-field');
     deliveryField?.insertAdjacentHTML('beforeend','<button type="button" id="new-delivery-inline" class="text-button">Neue Lieferadresse ergänzen</button>');
     deliveryField?.insertAdjacentHTML('afterend','<div id="delivery-route" class="span-2 route-panel"><div class="actions"><button type="button" class="secondary" id="calculate-route">Entfernung berechnen</button></div><div id="route-result" class="route-result muted">Die Adressen werden erst nach einem Klick an OpenStreetMap und OSRM übermittelt.</div><small><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap-Mitwirkende</a></small></div>');
     const routePanel=$('#delivery-route'),routeResult=$('#route-result'),updateRoutePanel=()=>{const visible=form.fulfilment.value==='Lieferung';routePanel.classList.toggle('hidden',!visible);if(visible)routeResult.textContent='Die Adressen werden erst nach einem Klick an OpenStreetMap und OSRM übermittelt.'};
     form.fulfilment.addEventListener('change',updateRoutePanel);form.customerId.addEventListener('change',updateRoutePanel);form.deliveryIndex.addEventListener('change',()=>{routeResult.textContent='Lieferadresse geändert. Entfernung bitte neu berechnen.'});updateRoutePanel();
     $('#calculate-route').onclick=async()=>{const button=$('#calculate-route'),customer=state.customers.find(x=>x.id===form.customerId.value),target=(customer?.deliveries||[])[Number(form.deliveryIndex.value)],companyAddress=businessAddress(state.settings),startAddress=[companyAddress,'Schweiz'].filter(Boolean).join(', '),targetAddress=target?[target.street,target.city,'Schweiz'].filter(Boolean).join(', '):'';if(!companyAddress){routeResult.textContent='Bitte zuerst die Startadresse in den Einstellungen ergänzen.';return}if(!targetAddress){routeResult.textContent='Bitte eine vollständige Lieferadresse auswählen.';return}button.disabled=true;button.textContent='Route wird berechnet …';routeResult.textContent='Adressen werden gesucht und die Fahrstrecke wird berechnet.';try{const route=await calculateDeliveryRoute(startAddress,targetAddress),hours=Math.floor(route.durationMin/60),minutes=route.durationMin%60,duration=hours?`${hours} Std. ${minutes} Min.`:`${minutes} Min.`,mapUrl=`https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${route.start.lat}%2C${route.start.lon}%3B${route.target.lat}%2C${route.target.lon}`;routeResult.innerHTML=`<strong>${route.distanceKm.toFixed(1)} km</strong> · ca. <strong>${duration}</strong><br><a href="${mapUrl}" target="_blank" rel="noopener">Route auf OpenStreetMap öffnen</a>`}catch(error){routeResult.textContent=error.message||'Die Route konnte nicht berechnet werden.'}finally{button.disabled=false;button.textContent='Entfernung berechnen'}};
-    $('#new-delivery-inline').onclick=()=>{
+    $('#new-delivery-inline').onclick=async()=>{
       const customer=state.customers.find(x=>x.id===form.customerId.value);if(!customer)return;
       const label=prompt('Bezeichnung der Lieferadresse (z. B. Geschäft):');if(label===null)return;
       const street=prompt('Strasse und Hausnummer:');if(street===null)return;
       const city=prompt('PLZ und Ort:');if(city===null)return;
-      customer.deliveries||=[];customer.deliveries.push({id:uid(),label:label.trim(),street:street.trim(),city:city.trim()});
-      form.fulfilment.value='Lieferung';form.fulfilment.dispatchEvent(new Event('change'));form.deliveryIndex.value=String(customer.deliveries.length-1);
-      notice('Lieferadresse ergänzt. Sie wird zusammen mit dem Auftrag gespeichert.');
+      const previous=structuredClone(customer),candidate={...customer,deliveries:[...(customer.deliveries||[]),{id:uid(),label:label.trim(),street:street.trim(),city:city.trim()}]};
+      try{const saved=await saveCustomerRecord(candidate,customer.updatedAt||null);Object.assign(customer,saved);form.fulfilment.value='Lieferung';form.fulfilment.dispatchEvent(new Event('change'));form.deliveryIndex.value=String(customer.deliveries.length-1);notice('Lieferadresse gespeichert und ausgewählt.')}catch(error){Object.assign(customer,previous);alert(`Lieferadresse konnte nicht gespeichert werden: ${error.message}`)}
     };
   }
 };
