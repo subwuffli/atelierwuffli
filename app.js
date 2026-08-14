@@ -5,6 +5,7 @@ const SUPABASE_KEY='sb_publishable_DGpxSu1ppS0fY7nbE75RSg_rI7G8UAb';
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
 let state,currentView='dashboard',realtimeChannel=null,presenceChannel=null,presenceHeartbeat=null,presenceUser=null,lastUserActivity=Date.now(),lastPresenceTrack=0,remoteRevision=0,isSaving=false,customerSort='number-asc',orderSort='number-desc',invoiceSort='number-desc',receiptSort='number-desc',financeMonth=new Date().toISOString().slice(0,7),activeEditLock=null,lockHeartbeat=null;
+let lastEditLockConflict=null;
 const EDIT_SESSION_TOKEN=crypto.randomUUID();
 const DEVICE_ID=localStorage.getItem('atelier-wuffli-device-id')||crypto.randomUUID();localStorage.setItem('atelier-wuffli-device-id',DEVICE_ID);
 const blankState=()=>({version:2,revision:0,settings:{firstName:'',companyName:'',street:'',postalCity:'',bankName:'',bankAddress:'',iban:'',mwstNumber:'',paymentDays:30,logo:'',orderText:'',invoiceText:''},customers:[],orders:[],invoices:[],expenses:[],lastExport:null});
@@ -399,8 +400,9 @@ async function importCloudData(e){
 async function acquireEditLock(type,id){
   if(activeEditLock?.type===type&&activeEditLock?.id===id&&!activeEditLock.lost)return true;
   await releaseCurrentEditLock();
-  const {data,error}=await supabaseClient.rpc('acquire_edit_lock_v3',{p_entity_type:type,p_entity_id:id,p_session_token:EDIT_SESSION_TOKEN});
-  if(error)throw error;if(!data)return false;
+  lastEditLockConflict=null;
+  const {data,error}=await supabaseClient.rpc('acquire_edit_lock_v4',{p_entity_type:type,p_entity_id:id,p_session_token:EDIT_SESSION_TOKEN,p_device_label:deviceLabel()});
+  if(error)throw error;if(!data?.acquired){lastEditLockConflict=data||null;return false}
   activeEditLock={type,id,heartbeatFailures:0,lost:false};
   lockHeartbeat=setInterval(renewCurrentEditLock,30000);
   return true;
@@ -409,14 +411,19 @@ async function acquireEditLock(type,id){
 async function renewCurrentEditLock(){
   const lock=activeEditLock;if(!lock||lock.lost)return;
   try{
-    const {data,error}=await supabaseClient.rpc('acquire_edit_lock_v3',{p_entity_type:lock.type,p_entity_id:lock.id,p_session_token:EDIT_SESSION_TOKEN});
-    if(error||!data)throw error||new Error('Sperre wurde von Supabase nicht bestätigt.');
+    const {data,error}=await supabaseClient.rpc('acquire_edit_lock_v4',{p_entity_type:lock.type,p_entity_id:lock.id,p_session_token:EDIT_SESSION_TOKEN,p_device_label:deviceLabel()});
+    if(error||!data?.acquired)throw error||new Error('Sperre wurde von Supabase nicht bestätigt.');
     lock.heartbeatFailures=0;
   }catch(error){
     lock.heartbeatFailures=(lock.heartbeatFailures||0)+1;
     console.error('Bearbeitungssperre konnte nicht erneuert werden:',error);
     if(lock.heartbeatFailures>=2)markEditLockLost();
   }
+}
+
+function editLockConflictMessage(subject){
+  const info=lastEditLockConflict,device=info?.deviceLabel||'einem anderen Gerät',owner=info?.ownerLabel&&info.ownerLabel!=='Benutzer'?`${info.ownerLabel} auf `:'';
+  return `${subject} wird gerade von ${owner}${device} bearbeitet. Bitte versuche es später erneut.`
 }
 
 function markEditLockLost(){
@@ -462,7 +469,7 @@ const originalCustomerForm=customerForm;
 customerForm=async function(id){
   if(id){
     try{
-      if(!(await acquireEditLock('customer',id))){alert('Dieser Kunde wird gerade auf einem anderen Gerät bearbeitet. Bitte versuche es später erneut.');return}
+      if(!(await acquireEditLock('customer',id))){alert(editLockConflictMessage('Dieser Kunde'));return}
       const latest=await loadFromSupabase();
       state=latest;
       state.settings.logo||=DEFAULT_LOGO;
@@ -481,7 +488,7 @@ const originalOrderForm=orderForm;
 orderForm=async function(id){
   if(id){
     try{
-      if(!(await acquireEditLock('order',id))){alert('Dieser Auftrag wird gerade auf einem anderen Gerät bearbeitet. Bitte versuche es später erneut.');return}
+      if(!(await acquireEditLock('order',id))){alert(editLockConflictMessage('Dieser Auftrag'));return}
       state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO;
     }catch(error){
       console.error('Bearbeitungssperre nicht verfügbar:',error);
@@ -528,7 +535,7 @@ const originalInvoiceForm=invoiceForm;
 invoiceForm=async function(id){
   if(id){
     try{
-      if(!(await acquireEditLock('invoice',id))){alert('Diese Rechnung wird gerade auf einem anderen Gerät bearbeitet. Bitte versuche es später erneut.');return}
+      if(!(await acquireEditLock('invoice',id))){alert(editLockConflictMessage('Diese Rechnung'));return}
       state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO;
     }catch(error){
       console.error('Bearbeitungssperre nicht verfügbar:',error);
@@ -541,7 +548,7 @@ const originalExpenseForm=expenseForm;
 expenseForm=async function(id){
   if(id){
     try{
-      if(!(await acquireEditLock('expense',id))){alert('Diese Ausgabe wird gerade auf einem anderen Gerät bearbeitet. Bitte versuche es später erneut.');return}
+      if(!(await acquireEditLock('expense',id))){alert(editLockConflictMessage('Diese Ausgabe'));return}
       state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO;
     }catch(error){console.error('Bearbeitungssperre nicht verfügbar:',error);await releaseCurrentEditLock();alert(`Bearbeitung nicht möglich: Die Sperre konnte nicht bestätigt werden (${error?.message||'Unbekannter Fehler'}). Bitte versuche es erneut.`);return}
   }else{
@@ -553,7 +560,7 @@ const SETTINGS_LOCK_ID='00000000-0000-0000-0000-000000000001';
 const originalRenderCloudSettings=renderCloudSettings;
 renderCloudSettings=async function(){
   try{
-    if(!(await acquireEditLock('settings',SETTINGS_LOCK_ID))){setTitle('Einstellungen');$('#content').innerHTML='<div class="card empty">Die Einstellungen werden gerade auf einem anderen Gerät bearbeitet. Bitte versuche es später erneut.</div>';return}
+    if(!(await acquireEditLock('settings',SETTINGS_LOCK_ID))){setTitle('Einstellungen');$('#content').innerHTML=`<div class="card empty">${esc(editLockConflictMessage('Die Einstellungen'))}</div>`;return}
     state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO;originalRenderCloudSettings();
   }catch(error){console.error('Einstellungssperre nicht verfügbar:',error);await releaseCurrentEditLock();setTitle('Einstellungen');$('#content').innerHTML=`<div class="card empty">Die Einstellungen können momentan nicht sicher bearbeitet werden: ${esc(error?.message||'Unbekannter Fehler')}</div>`}
 };
