@@ -25,3 +25,5 @@ Die Publishable Keys der Browser-Apps dürfen öffentlich sein. Secret- und Serv
 Die zugehörige Testmigration liegt unter `supabase/test-record-storage-v0037.sql` und ist ausschliesslich im Supabase-Testprojekt installiert.
 
 `TEST V0.0.38.0` ergänzt sichere Löschungen ohne physisches Entfernen. Gelöschte Datensätze werden aus Listen, Auswertungen und PDF-Berichten ausgeschlossen und können unmittelbar über „Rückgängig“ wiederhergestellt werden. Ein unveränderbares Audit-Log protokolliert Änderungen mit Zeitpunkt, Benutzer sowie altem und neuem Datenstand. Die Migration liegt unter `supabase/test-soft-delete-audit-v0038.sql`.
+
+`TEST V0.0.39.0` ergänzt eine globale Suche über Kunden, Belegnummern, Referenzen, Artikel, Beträge und Ausgaben. Auf Smartphones steht eine Navigation mit fünf Zielen, einer zentralen Schnellaktion und mindestens 48 px grossen Touch-Zielen zur Verfügung; weitere Bereiche öffnen sich über „Mehr“.
