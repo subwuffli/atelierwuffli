@@ -31,3 +31,5 @@ Die zugehörige Testmigration liegt unter `supabase/test-record-storage-v0037.sq
 `TEST V0.0.40.0` führt eine Mitglieder-Allowlist und strengere Row-Level-Security ein. Nur ausdrücklich freigegebene ERP-Mitglieder sehen Geschäftsdaten. Physisches Löschen der Hauptdatensätze ist für Browserbenutzer auf Datenbankebene gesperrt. Der Sicherheitsstatus zeigt Rolle, Mandant, Audit-Schutz und MFA-Stand. Die Migration liegt unter `supabase/test-security-baseline-v0040.sql`.
 
 `TEST V0.0.41.0` ergänzt interne Datenbank-Snapshots, einen strukturellen Wiederherstellungstest, Betriebsstatus sowie zentrale JavaScript-Fehlerprotokolle mit Rate-Limit. Der erste Snapshot wurde erfolgreich als `valid` geprüft. Die Migration liegt unter `supabase/test-operations-v0041.sql`.
+
+`TEST V0.0.42.0` ergänzt einen dauerhaften Papierkorb für gelöschte Kunden, Aufträge, Rechnungen, Quittungen und Ausgaben. Einträge können in sicherer Abhängigkeitsreihenfolge wiederhergestellt werden. Auf Smartphones lässt sich der vollständige Funktionsbaum wieder über die Menüschaltfläche ein- und ausblenden. Die Migration liegt unter `supabase/test-trash-v0042.sql`.
