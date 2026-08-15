@@ -37,3 +37,5 @@ Die zugehörige Testmigration liegt unter `supabase/test-record-storage-v0037.sq
 `TEST V0.0.43.0` macht die vier Kennzahlenkarten auf der Übersicht direkt bedienbar. Kunden und Aufträge führen in ihren jeweiligen Bereich; offene Rechnungen und offener Betrag öffnen die Rechnungsübersicht. Die Karten sind auch per Tastatur erreichbar.
 
 `TEST V0.0.44.0` stellt Datensatzaktionen auf Smartphones platzsparend dar. Die verfügbaren Aktionen eines Kunden, Termins, Auftrags, einer Rechnung, Quittung oder Ausgabe erscheinen erst nach Auswahl der betreffenden Karte; gleichzeitig bleibt höchstens ein Aktionsbereich geöffnet. Desktoplisten bleiben unverändert.
+
+`TEST V0.0.45.0` verschiebt die Bedienleiste der mobilen PDF-Vorschau an den unteren Bildschirmrand. Dateiname sowie die mindestens 48 px hohen Schaltflächen zum Schließen und Teilen beziehungsweise Herunterladen bleiben dadurch auch mit mobilen Browserleisten und iPhone-Sicherheitsabstand erreichbar.
