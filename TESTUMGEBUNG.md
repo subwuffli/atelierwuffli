@@ -43,3 +43,5 @@ Die zugehörige Testmigration liegt unter `supabase/test-record-storage-v0037.sq
 `TEST V0.0.45.1` erkennt die mobile PDF-Vorschau zusätzlich anhand der Bildschirmbreite und damit zuverlässig auch auf Geräten, die ihre Touch-Eigenschaften nicht korrekt melden.
 
 `TEST V0.0.46.0` ergänzt zusammenhängende Detailansichten für Aufträge, Rechnungen und Quittungen. Die Auswahl eines Datensatzes zeigt Kunden-, Adress-, Termin-, Zahlungs-, Text- und Positionsdaten sowie alle passenden Bearbeitungs- und PDF-Aktionen. Verknüpfte Dokumente können direkt gewechselt werden; „Zurück“ führt in den zuvor geöffneten Abschnitt.
+
+`TEST V0.0.47.0` ermittelt die zu einem Auftrag gehörende Rechnung und Quittung zuverlässig über beide Datenbankverknüpfungen. Die Detailansicht besitzt nun eine eigene Navigation: Von einem Auftrag zur Rechnung oder Quittung gewechselt führt „Zum vorherigen Dokument“ zuerst zurück zur vorherigen Detailansicht und erst danach zurück zur ursprünglichen Liste.
