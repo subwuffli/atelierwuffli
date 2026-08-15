@@ -33,3 +33,5 @@ Die zugehörige Testmigration liegt unter `supabase/test-record-storage-v0037.sq
 `TEST V0.0.41.0` ergänzt interne Datenbank-Snapshots, einen strukturellen Wiederherstellungstest, Betriebsstatus sowie zentrale JavaScript-Fehlerprotokolle mit Rate-Limit. Der erste Snapshot wurde erfolgreich als `valid` geprüft. Die Migration liegt unter `supabase/test-operations-v0041.sql`.
 
 `TEST V0.0.42.0` ergänzt einen dauerhaften Papierkorb für gelöschte Kunden, Aufträge, Rechnungen, Quittungen und Ausgaben. Einträge können in sicherer Abhängigkeitsreihenfolge wiederhergestellt werden. Auf Smartphones lässt sich der vollständige Funktionsbaum wieder über die Menüschaltfläche ein- und ausblenden. Die Migration liegt unter `supabase/test-trash-v0042.sql`.
+
+`TEST V0.0.43.0` macht die vier Kennzahlenkarten auf der Übersicht direkt bedienbar. Kunden und Aufträge führen in ihren jeweiligen Bereich; offene Rechnungen und offener Betrag öffnen die Rechnungsübersicht. Die Karten sind auch per Tastatur erreichbar.
