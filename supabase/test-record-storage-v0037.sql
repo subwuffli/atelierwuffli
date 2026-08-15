@@ -1,0 +1,139 @@
+-- Nur zuerst im Testprojekt ausführen.
+-- V0.0.37: Datensatzweise Speicherung für alle operativen ERP-Bereiche.
+
+create or replace function public.erp_bump_revision_v1()
+returns bigint language plpgsql security invoker set search_path=public as $$
+declare v_revision bigint;
+begin
+  update erp_meta set revision=revision+1,updated_at=clock_timestamp(),updated_by=auth.uid()
+  where id='main' returning revision into v_revision;
+  return v_revision;
+end $$;
+
+create or replace function public.save_order_v1(p_order jsonb,p_expected_updated_at timestamptz default null,p_session_token uuid default null)
+returns jsonb language plpgsql security invoker set search_path=public as $$
+declare
+  v_entity_id uuid:=coalesce(nullif(p_order->>'id','')::uuid,gen_random_uuid());
+  entity_number text; current_stamp timestamptz; saved_stamp timestamptz; revision_value bigint;
+  item jsonb; item_index integer:=0; exists_already boolean:=false; linked_invoice uuid;
+begin
+  if auth.uid() is null then raise exception 'AUTH_REQUIRED'; end if;
+  select number,updated_at into entity_number,current_stamp from orders where id=v_entity_id for update; exists_already:=found;
+  if exists_already then
+    if p_session_token is not null and not exists(select 1 from edit_locks l where l.entity_type='order' and l.entity_id=v_entity_id and l.user_id=auth.uid() and l.session_token=p_session_token and l.expires_at>now()) then raise exception 'EDIT_LOCK_LOST'; end if;
+    if p_expected_updated_at is null or current_stamp<>p_expected_updated_at then raise exception 'ORDER_CONFLICT'; end if;
+    update orders set order_date=(p_order->>'date')::date,customer_id=(p_order->>'customerId')::uuid,fulfilment=p_order->>'fulfilment',fulfilment_date=(p_order->>'fulfilmentDate')::date,delivery_index=nullif(p_order->>'deliveryIndex','')::integer,status=p_order->>'status',text=coalesce(p_order->>'text',''),notes=coalesce(p_order->>'notes',''),total=coalesce((p_order->>'total')::numeric,0),customer_snapshot=coalesce(p_order->'customerSnapshot','{}'::jsonb),archived=coalesce((p_order->>'archived')::boolean,false),updated_at=clock_timestamp() where id=v_entity_id returning updated_at into saved_stamp;
+  else
+    entity_number:=next_document_number('AF',(p_order->>'date')::date);
+    insert into orders(id,number,order_date,customer_id,fulfilment,fulfilment_date,delivery_index,status,text,notes,total,customer_snapshot,archived,created_at,updated_at)
+    values(v_entity_id,entity_number,(p_order->>'date')::date,(p_order->>'customerId')::uuid,p_order->>'fulfilment',(p_order->>'fulfilmentDate')::date,nullif(p_order->>'deliveryIndex','')::integer,p_order->>'status',coalesce(p_order->>'text',''),coalesce(p_order->>'notes',''),coalesce((p_order->>'total')::numeric,0),coalesce(p_order->'customerSnapshot','{}'::jsonb),false,clock_timestamp(),clock_timestamp()) returning updated_at into saved_stamp;
+  end if;
+  delete from order_items where order_id=v_entity_id;
+  for item in select value from jsonb_array_elements(coalesce(p_order->'items','[]'::jsonb)) loop
+    insert into order_items(id,order_id,description,quantity,price,total,sort_order) values(coalesce(nullif(item->>'id','')::uuid,gen_random_uuid()),v_entity_id,coalesce(item->>'description',''),coalesce((item->>'quantity')::numeric,0),coalesce((item->>'price')::numeric,0),coalesce((item->>'total')::numeric,0),item_index);
+    item_index:=item_index+1;
+  end loop;
+
+  select id into linked_invoice from invoices where order_id=v_entity_id for update;
+  if linked_invoice is not null then
+    update invoices set order_number=entity_number,customer_id=(p_order->>'customerId')::uuid,due_date=((p_order->>'fulfilmentDate')::date+(select payment_days from company_settings where id='main')),total=coalesce((p_order->>'total')::numeric,0),customer_snapshot=coalesce(p_order->'customerSnapshot','{}'::jsonb),updated_at=clock_timestamp() where id=linked_invoice;
+    delete from invoice_items where invoice_id=linked_invoice;
+    item_index:=0;
+    for item in select value from jsonb_array_elements(coalesce(p_order->'items','[]'::jsonb)) loop
+      insert into invoice_items(id,invoice_id,description,quantity,price,total,sort_order) values(coalesce(nullif(item->>'id','')::uuid,gen_random_uuid()),linked_invoice,coalesce(item->>'description',''),coalesce((item->>'quantity')::numeric,0),coalesce((item->>'price')::numeric,0),coalesce((item->>'total')::numeric,0),item_index);
+      item_index:=item_index+1;
+    end loop;
+    update receipts set data=data||jsonb_build_object('orderNumber',entity_number,'customerId',p_order->>'customerId','customerSnapshot',coalesce(p_order->'customerSnapshot','{}'::jsonb),'items',coalesce(p_order->'items','[]'::jsonb),'total',coalesce((p_order->>'total')::numeric,0),'updatedAt',clock_timestamp()) where invoice_id=linked_invoice;
+  end if;
+  revision_value:=erp_bump_revision_v1();
+  return jsonb_build_object('revision',revision_value,'id',v_entity_id,'number',entity_number,'updatedAt',saved_stamp);
+end $$;
+
+create or replace function public.save_invoice_v1(p_invoice jsonb,p_expected_updated_at timestamptz default null,p_session_token uuid default null)
+returns jsonb language plpgsql security invoker set search_path=public as $$
+declare
+  v_entity_id uuid:=coalesce(nullif(p_invoice->>'id','')::uuid,gen_random_uuid());
+  entity_number text; current_stamp timestamptz; saved_stamp timestamptz; revision_value bigint;
+  item jsonb; item_index integer:=0; receipt_data jsonb; receipt_id uuid; receipt_number text; exists_already boolean:=false;
+begin
+  if auth.uid() is null then raise exception 'AUTH_REQUIRED'; end if;
+  select number,updated_at into entity_number,current_stamp from invoices where id=v_entity_id for update; exists_already:=found;
+  if exists_already then
+    if p_session_token is not null and not exists(select 1 from edit_locks l where l.entity_type='invoice' and l.entity_id=v_entity_id and l.user_id=auth.uid() and l.session_token=p_session_token and l.expires_at>now()) then raise exception 'EDIT_LOCK_LOST'; end if;
+    if p_expected_updated_at is null or current_stamp<>p_expected_updated_at then raise exception 'INVOICE_CONFLICT'; end if;
+    update invoices set invoice_date=(p_invoice->>'date')::date,due_date=(p_invoice->>'dueDate')::date,order_id=nullif(p_invoice->>'orderId','')::uuid,order_number=coalesce(p_invoice->>'orderNumber',''),customer_id=(p_invoice->>'customerId')::uuid,status=p_invoice->>'status',paid_date=nullif(p_invoice->>'paidDate','')::date,payment_method=coalesce(p_invoice->>'paymentMethod',''),text=coalesce(p_invoice->>'text',''),total=coalesce((p_invoice->>'total')::numeric,0),customer_snapshot=coalesce(p_invoice->'customerSnapshot','{}'::jsonb),archived=coalesce((p_invoice->>'archived')::boolean,false),updated_at=clock_timestamp() where id=v_entity_id returning updated_at into saved_stamp;
+  else
+    entity_number:=next_document_number('RE',(p_invoice->>'date')::date);
+    insert into invoices(id,number,invoice_date,due_date,order_id,order_number,customer_id,status,paid_date,payment_method,text,total,customer_snapshot,archived,created_at,updated_at)
+    values(v_entity_id,entity_number,(p_invoice->>'date')::date,(p_invoice->>'dueDate')::date,nullif(p_invoice->>'orderId','')::uuid,coalesce(p_invoice->>'orderNumber',''),(p_invoice->>'customerId')::uuid,p_invoice->>'status',nullif(p_invoice->>'paidDate','')::date,coalesce(p_invoice->>'paymentMethod',''),coalesce(p_invoice->>'text',''),coalesce((p_invoice->>'total')::numeric,0),coalesce(p_invoice->'customerSnapshot','{}'::jsonb),false,clock_timestamp(),clock_timestamp()) returning updated_at into saved_stamp;
+  end if;
+  delete from invoice_items where invoice_id=v_entity_id;
+  for item in select value from jsonb_array_elements(coalesce(p_invoice->'items','[]'::jsonb)) loop
+    insert into invoice_items(id,invoice_id,description,quantity,price,total,sort_order) values(coalesce(nullif(item->>'id','')::uuid,gen_random_uuid()),v_entity_id,coalesce(item->>'description',''),coalesce((item->>'quantity')::numeric,0),coalesce((item->>'price')::numeric,0),coalesce((item->>'total')::numeric,0),item_index);
+    item_index:=item_index+1;
+  end loop;
+  receipt_data:=p_invoice->'receipt';
+  if receipt_data is not null and jsonb_typeof(receipt_data)='object' then
+    select id,number into receipt_id,receipt_number from receipts where invoice_id=v_entity_id;
+    receipt_id:=coalesce(receipt_id,nullif(receipt_data->>'id','')::uuid,gen_random_uuid());
+    receipt_number:=coalesce(receipt_number,nullif(receipt_data->>'number',''),next_document_number('QU',coalesce(nullif(receipt_data->>'date','')::date,(p_invoice->>'date')::date)));
+    insert into receipts(id,number,receipt_date,invoice_id,invoice_number,data,created_at)
+    values(receipt_id,receipt_number,coalesce(nullif(receipt_data->>'date','')::date,(p_invoice->>'date')::date),v_entity_id,entity_number,(receipt_data-'id'-'number'-'date'-'invoiceId'-'invoiceNumber'-'createdAt')||jsonb_build_object('invoiceNumber',entity_number),coalesce(nullif(receipt_data->>'createdAt','')::timestamptz,clock_timestamp()))
+    on conflict(invoice_id) do update set receipt_date=excluded.receipt_date,invoice_number=excluded.invoice_number,data=excluded.data;
+  end if;
+  revision_value:=erp_bump_revision_v1();
+  return jsonb_build_object('revision',revision_value,'id',v_entity_id,'number',entity_number,'updatedAt',saved_stamp,'receiptNumber',receipt_number);
+end $$;
+
+create or replace function public.save_expense_v1(p_expense jsonb,p_expected_updated_at timestamptz default null,p_session_token uuid default null)
+returns jsonb language plpgsql security invoker set search_path=public as $$
+declare v_entity_id uuid:=coalesce(nullif(p_expense->>'id','')::uuid,gen_random_uuid()); current_stamp timestamptz; saved_stamp timestamptz; revision_value bigint; exists_already boolean:=false;
+begin
+  if auth.uid() is null then raise exception 'AUTH_REQUIRED'; end if;
+  select updated_at into current_stamp from expenses where id=v_entity_id for update; exists_already:=found;
+  if exists_already then
+    if p_session_token is not null and not exists(select 1 from edit_locks l where l.entity_type='expense' and l.entity_id=v_entity_id and l.user_id=auth.uid() and l.session_token=p_session_token and l.expires_at>now()) then raise exception 'EDIT_LOCK_LOST'; end if;
+    if p_expected_updated_at is null or current_stamp<>p_expected_updated_at then raise exception 'EXPENSE_CONFLICT'; end if;
+    update expenses set expense_date=(p_expense->>'date')::date,amount=coalesce((p_expense->>'amount')::numeric,0),description=coalesce(p_expense->>'description',''),updated_at=clock_timestamp() where id=v_entity_id returning updated_at into saved_stamp;
+  else
+    insert into expenses(id,expense_date,amount,description,created_at,updated_at) values(v_entity_id,(p_expense->>'date')::date,coalesce((p_expense->>'amount')::numeric,0),coalesce(p_expense->>'description',''),clock_timestamp(),clock_timestamp()) returning updated_at into saved_stamp;
+  end if;
+  revision_value:=erp_bump_revision_v1();
+  return jsonb_build_object('revision',revision_value,'id',v_entity_id,'updatedAt',saved_stamp);
+end $$;
+
+create or replace function public.save_settings_v1(p_settings jsonb,p_session_token uuid)
+returns jsonb language plpgsql security invoker set search_path=public as $$
+declare revision_value bigint; saved_stamp timestamptz; lock_id constant uuid:='00000000-0000-0000-0000-000000000001';
+begin
+  if auth.uid() is null then raise exception 'AUTH_REQUIRED'; end if;
+  if not exists(select 1 from edit_locks where entity_type='settings' and entity_id=lock_id and user_id=auth.uid() and session_token=p_session_token and expires_at>now()) then raise exception 'EDIT_LOCK_LOST'; end if;
+  update company_settings set name=coalesce(p_settings->>'name',''),address=coalesce(p_settings->>'address',''),iban=coalesce(p_settings->>'iban',''),first_name=coalesce(p_settings->>'firstName',''),company_name=coalesce(p_settings->>'companyName',''),street=coalesce(p_settings->>'street',''),postal_city=coalesce(p_settings->>'postalCity',''),bank_name=coalesce(p_settings->>'bankName',''),bank_address=coalesce(p_settings->>'bankAddress',''),mwst_number=coalesce(p_settings->>'mwstNumber',''),payment_days=coalesce((p_settings->>'paymentDays')::integer,30),logo=coalesce(p_settings->>'logo',''),order_text=coalesce(p_settings->>'orderText',''),invoice_text=coalesce(p_settings->>'invoiceText',''),updated_at=clock_timestamp() where id='main' returning updated_at into saved_stamp;
+  revision_value:=erp_bump_revision_v1();
+  return jsonb_build_object('revision',revision_value,'updatedAt',saved_stamp);
+end $$;
+
+create or replace function public.export_erp_backup()
+returns jsonb language sql security invoker set search_path=public as $$
+select jsonb_build_object(
+  'version',2,'revision',(select revision from erp_meta where id='main'),
+  'settings',(select jsonb_build_object('name',name,'address',address,'iban',iban,'firstName',first_name,'companyName',company_name,'street',street,'postalCity',postal_city,'bankName',bank_name,'bankAddress',bank_address,'mwstNumber',mwst_number,'paymentDays',payment_days,'logo',logo,'orderText',order_text,'invoiceText',invoice_text,'updatedAt',updated_at) from company_settings where id='main'),
+  'customers',coalesce((select jsonb_agg(jsonb_build_object('id',c.id,'number',c.number,'company',c.company,'salutation',c.salutation,'firstName',c.first_name,'lastName',c.last_name,'email',c.email,'phone',c.phone,'street',c.street,'zip',c.zip,'city',c.city,'notes',c.notes,'archived',c.archived,'createdAt',c.created_at,'updatedAt',c.updated_at,'deliveries',coalesce((select jsonb_agg(jsonb_build_object('id',d.id,'label',d.label,'street',d.street,'city',d.city) order by d.sort_order,d.id) from delivery_addresses d where d.customer_id=c.id),'[]'::jsonb)) order by c.created_at) from customers c),'[]'::jsonb),
+  'orders',coalesce((select jsonb_agg(jsonb_build_object('id',o.id,'number',o.number,'date',o.order_date,'customerId',o.customer_id,'fulfilment',o.fulfilment,'fulfilmentDate',o.fulfilment_date,'deliveryIndex',o.delivery_index,'status',o.status,'text',o.text,'notes',o.notes,'total',o.total,'customerSnapshot',o.customer_snapshot,'archived',o.archived,'createdAt',o.created_at,'updatedAt',o.updated_at,'invoiceId',(select i.id from invoices i where i.order_id=o.id limit 1),'items',coalesce((select jsonb_agg(jsonb_build_object('id',x.id,'description',x.description,'quantity',x.quantity,'price',x.price,'total',x.total) order by x.sort_order,x.id) from order_items x where x.order_id=o.id),'[]'::jsonb)) order by o.created_at) from orders o),'[]'::jsonb),
+  'invoices',coalesce((select jsonb_agg(jsonb_build_object('id',i.id,'number',i.number,'date',i.invoice_date,'dueDate',i.due_date,'orderId',i.order_id,'orderNumber',i.order_number,'customerId',i.customer_id,'status',i.status,'paidDate',i.paid_date,'paymentMethod',i.payment_method,'text',i.text,'total',i.total,'customerSnapshot',i.customer_snapshot,'archived',i.archived,'createdAt',i.created_at,'updatedAt',i.updated_at,'receipt',(select r.data||jsonb_build_object('id',r.id,'number',r.number,'date',r.receipt_date,'invoiceId',r.invoice_id,'invoiceNumber',r.invoice_number,'createdAt',r.created_at) from receipts r where r.invoice_id=i.id),'items',coalesce((select jsonb_agg(jsonb_build_object('id',x.id,'description',x.description,'quantity',x.quantity,'price',x.price,'total',x.total) order by x.sort_order,x.id) from invoice_items x where x.invoice_id=i.id),'[]'::jsonb)) order by i.created_at) from invoices i),'[]'::jsonb),
+  'expenses',coalesce((select jsonb_agg(jsonb_build_object('id',e.id,'date',e.expense_date,'amount',e.amount,'description',e.description,'createdAt',e.created_at,'updatedAt',e.updated_at) order by e.expense_date,e.created_at) from expenses e),'[]'::jsonb)
+);
+$$;
+
+grant execute on function public.erp_bump_revision_v1() to authenticated;
+grant execute on function public.save_order_v1(jsonb,timestamptz,uuid) to authenticated;
+grant execute on function public.save_invoice_v1(jsonb,timestamptz,uuid) to authenticated;
+grant execute on function public.save_expense_v1(jsonb,timestamptz,uuid) to authenticated;
+grant execute on function public.save_settings_v1(jsonb,uuid) to authenticated;
+grant execute on function public.export_erp_backup() to authenticated;
+revoke all on function public.erp_bump_revision_v1() from anon;
+revoke all on function public.save_order_v1(jsonb,timestamptz,uuid) from anon;
+revoke all on function public.save_invoice_v1(jsonb,timestamptz,uuid) from anon;
+revoke all on function public.save_expense_v1(jsonb,timestamptz,uuid) from anon;
+revoke all on function public.save_settings_v1(jsonb,uuid) from anon;
+notify pgrst, 'reload schema';

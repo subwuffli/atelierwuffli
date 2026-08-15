@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.36.2';
+const APP_VERSION='TEST V0.0.37.0';
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
 let state,currentView='dashboard',realtimeChannel=null,presenceChannel=null,presenceHeartbeat=null,versionHeartbeat=null,presenceUser=null,lastUserActivity=Date.now(),lastPresenceTrack=0,remoteRevision=0,isSaving=false,customerSort='number-asc',orderSort='number-desc',invoiceSort='number-desc',receiptSort='number-desc',financeMonth=new Date().toISOString().slice(0,7),activeEditLock=null,lockHeartbeat=null;
@@ -87,6 +87,31 @@ async function saveCustomerRecord(customer,expectedUpdatedAt=null,requireLock=fa
     if(message.includes('EDIT_LOCK_LOST'))throw new Error('Die Bearbeitungssperre ist abgelaufen. Bitte schliesse das Formular und öffne ihn erneut.');
     throw error;
   }finally{isSaving=false}
+}
+async function saveRecordRpc(functionName,payloadName,payload,expectedUpdatedAt=null,requireLock=false){
+  isSaving=true;
+  try{
+    if(requireLock)await assertCurrentEditLock();
+    const args={[payloadName]:payload,p_expected_updated_at:expectedUpdatedAt||null,p_session_token:requireLock?EDIT_SESSION_TOKEN:null};
+    const {data,error}=await supabaseClient.rpc(functionName,args);if(error)throw error;
+    remoteRevision=Math.max(remoteRevision,Number(data.revision)||0);
+    state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO;
+    return data;
+  }catch(error){
+    const message=String(error?.message||'');
+    if(message.includes('_CONFLICT'))throw new Error('Der Datensatz wurde zwischenzeitlich geändert. Bitte schliesse das Formular und öffne ihn erneut.');
+    if(message.includes('EDIT_LOCK_LOST'))throw new Error('Die Bearbeitungssperre ist abgelaufen. Bitte schliesse das Formular und öffne ihn erneut.');
+    throw error;
+  }finally{isSaving=false}
+}
+const saveOrderRecord=(record,stamp=null,locked=false)=>saveRecordRpc('save_order_v1','p_order',record,stamp,locked);
+const saveInvoiceRecord=(record,stamp=null,locked=false)=>saveRecordRpc('save_invoice_v1','p_invoice',record,stamp,locked);
+const saveExpenseRecord=(record,stamp=null,locked=false)=>saveRecordRpc('save_expense_v1','p_expense',record,stamp,locked);
+async function saveSettingsRecord(settings){
+  isSaving=true;
+  try{await assertCurrentEditLock();const {data,error}=await supabaseClient.rpc('save_settings_v1',{p_settings:settings,p_session_token:EDIT_SESSION_TOKEN});if(error)throw error;remoteRevision=Math.max(remoteRevision,Number(data.revision)||0);state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO;return data}
+  catch(error){if(String(error?.message||'').includes('EDIT_LOCK_LOST'))throw new Error('Die Bearbeitungssperre ist abgelaufen. Bitte öffne die Einstellungen erneut.');throw error}
+  finally{isSaving=false}
 }
 function notice(msg){const n=$('#notice');n.textContent=msg;n.classList.remove('hidden');setTimeout(()=>n.classList.add('hidden'),3500)}
 function setTitle(t){$('#page-title').textContent=t}
@@ -539,11 +564,11 @@ orderForm=async function(id){
   }
   originalOrderForm(id);
   const form=$('#order-form');
-  if(id&&form){
-    const originalSubmit=form.onsubmit;
+  if(form){
+    const originalSubmit=form.onsubmit,existing=id?state.orders.find(x=>x.id===id):null,expectedUpdatedAt=existing?.updatedAt||null;
     form.onsubmit=async event=>{
-      const cloudSave=save,cloudClose=closeModal;save=async()=>{};closeModal=async()=>{};
-      try{await originalSubmit(event);const order=state.orders.find(x=>x.id===id);syncInvoiceFromOrder(order);await cloudSave();await cloudClose();renderOrders();const invoice=state.invoices.find(x=>x.id===order?.invoiceId);notice(invoice?.receipt?'Auftrag, Rechnung und Quittung aktualisiert.':order?.invoiceId?'Auftrag und verknüpfte Rechnung aktualisiert.':'Auftrag gespeichert.')}finally{save=cloudSave;closeModal=cloudClose}
+      const cloudSave=save,cloudClose=closeModal,submit=form.querySelector('button.primary');save=async()=>{};closeModal=async()=>{};submit.disabled=true;submit.textContent='Wird gespeichert …';
+      try{await originalSubmit(event);const order=id?state.orders.find(x=>x.id===id):state.orders[state.orders.length-1];if(typeof order.number!=='string')order.number='';await saveOrderRecord(order,expectedUpdatedAt,Boolean(existing));await cloudClose();renderSortableOrders();const invoice=state.invoices.find(x=>x.orderId===order.id);notice(invoice?.receipt?'Auftrag, Rechnung und Quittung aktualisiert.':invoice?'Auftrag und verknüpfte Rechnung aktualisiert.':'Auftrag gespeichert.')}catch(error){alert(`Auftrag konnte nicht gespeichert werden: ${error.message}`)}finally{save=cloudSave;closeModal=cloudClose;submit.disabled=false;submit.textContent='Speichern'}
     };
   }
   if(form){
@@ -588,6 +613,8 @@ invoiceForm=async function(id){
     }
   }
   originalInvoiceForm(id);
+  const form=$('#invoice-form'),invoice=state.invoices.find(x=>x.id===id),expectedUpdatedAt=invoice?.updatedAt||null;
+  if(form){const originalSubmit=form.onsubmit;form.onsubmit=async event=>{const cloudSave=save,cloudClose=closeModal,submit=form.querySelector('button.primary');save=async()=>{};closeModal=async()=>{};submit.disabled=true;submit.textContent='Wird gespeichert …';try{await originalSubmit(event);await saveInvoiceRecord(invoice,expectedUpdatedAt,true);await cloudClose();renderSortableInvoices();notice(invoice.receipt?'Rechnung und Quittung aktualisiert.':'Rechnung gespeichert.')}catch(error){alert(`Rechnung konnte nicht gespeichert werden: ${error.message}`)}finally{save=cloudSave;closeModal=cloudClose;submit.disabled=false;submit.textContent='Speichern'}}}
 };
 const originalExpenseForm=expenseForm;
 expenseForm=async function(id){
@@ -600,6 +627,8 @@ expenseForm=async function(id){
     try{state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO}catch(error){alert(`Aktuelle Ausgabendaten konnten nicht geladen werden: ${error.message}`);return}
   }
   originalExpenseForm(id);
+  const form=$('#expense-form'),expense=id?state.expenses.find(x=>x.id===id):null,expectedUpdatedAt=expense?.updatedAt||null;
+  if(form){const originalSubmit=form.onsubmit;form.onsubmit=async event=>{const cloudSave=save,cloudClose=closeModal,submit=form.querySelector('button.primary');save=async()=>{};closeModal=async()=>{};submit.disabled=true;submit.textContent='Wird gespeichert …';try{await originalSubmit(event);const record=id?state.expenses.find(x=>x.id===id):state.expenses[state.expenses.length-1];await saveExpenseRecord(record,expectedUpdatedAt,Boolean(expense));await cloudClose();financeMonth=monthKey(record.date);renderExpenses();notice('Ausgabe gespeichert.')}catch(error){alert(`Ausgabe konnte nicht gespeichert werden: ${error.message}`)}finally{save=cloudSave;closeModal=cloudClose;submit.disabled=false;submit.textContent='Speichern'}}}
 };
 const SETTINGS_LOCK_ID='00000000-0000-0000-0000-000000000001';
 const originalRenderCloudSettings=renderCloudSettings;
@@ -607,6 +636,8 @@ renderCloudSettings=async function(){
   try{
     if(!(await acquireEditLock('settings',SETTINGS_LOCK_ID))){setTitle('Einstellungen');$('#content').innerHTML=`<div class="card empty">${esc(editLockConflictMessage('Die Einstellungen'))}</div>`;return}
     state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO;originalRenderCloudSettings();
+    const form=$('#settings-form');if(form)form.onsubmit=async event=>{event.preventDefault();const submit=form.querySelector('button.primary'),data=Object.fromEntries(new FormData(form));Object.assign(state.settings,data,{paymentDays:Number(data.paymentDays)});submit.disabled=true;submit.textContent='Wird gespeichert …';try{await saveSettingsRecord(state.settings);notice('Einstellungen gespeichert.')}catch(error){alert(`Einstellungen konnten nicht gespeichert werden: ${error.message}`)}finally{submit.disabled=false;submit.textContent='Einstellungen speichern'}};
+    const logoInput=$('#logo-file');if(logoInput)logoInput.onchange=event=>{const file=event.target.files[0];if(!file)return;if(file.size>1_500_000){alert('Das Logo darf maximal 1,5 MB gross sein.');return}const reader=new FileReader();reader.onload=async()=>{try{state.settings.logo=reader.result;await saveSettingsRecord(state.settings);renderCloudSettings();notice('Logo gespeichert.')}catch(error){alert(`Logo konnte nicht gespeichert werden: ${error.message}`)}};reader.readAsDataURL(file)};
   }catch(error){console.error('Einstellungssperre nicht verfügbar:',error);await releaseCurrentEditLock();setTitle('Einstellungen');$('#content').innerHTML=`<div class="card empty">Die Einstellungen können momentan nicht sicher bearbeitet werden: ${esc(error?.message||'Unbekannter Fehler')}</div>`}
 };
 function syncInvoiceFromOrder(order){
@@ -615,6 +646,29 @@ function syncInvoiceFromOrder(order){
   Object.assign(invoice,{orderId:order.id,orderNumber:order.number,customerId:order.customerId,customerSnapshot:structuredClone(order.customerSnapshot),items:structuredClone(order.items),total:order.total,dueDate:dueDateFromFulfilment(order.fulfilmentDate),updatedAt:new Date().toISOString()});
   syncReceiptFromInvoice(invoice);
 }
+
+createInvoice=async function(orderId){
+  const order=state.orders.find(x=>x.id===orderId);if(!order||order.invoiceId)return;
+  const issued=today(),invoice={id:uid(),number:'',date:issued,dueDate:dueDateFromFulfilment(order.fulfilmentDate),orderId:order.id,orderNumber:order.number,customerId:order.customerId,customerSnapshot:structuredClone(order.customerSnapshot),items:structuredClone(order.items),total:order.total,status:'Offen',paidDate:'',paymentMethod:'',text:state.settings.invoiceText,archived:false,createdAt:new Date().toISOString()};
+  try{await saveInvoiceRecord(invoice);render('invoices');const saved=state.invoices.find(x=>x.orderId===orderId);notice(`Rechnung ${saved?.number||''} erstellt.`)}catch(error){alert(`Rechnung konnte nicht erstellt werden: ${error.message}`)}
+};
+
+createReceipt=async function(invoiceId){
+  const invoice=state.invoices.find(x=>x.id===invoiceId);if(!invoice||invoice.receipt)return;if(invoice.status!=='Bezahlt'){alert('Eine Quittung kann erst erstellt werden, wenn die Rechnung als bezahlt markiert ist.');return}
+  const receiptDate=today(),candidate={...invoice,receipt:{id:uid(),number:'',date:receiptDate,invoiceId:invoice.id,invoiceNumber:invoice.number,orderNumber:invoice.orderNumber,customerId:invoice.customerId,customerSnapshot:structuredClone(invoice.customerSnapshot),items:structuredClone(invoice.items),total:invoice.total,paymentMethod:invoice.paymentMethod||'',text:'Zahlung dankend erhalten.',createdAt:new Date().toISOString()}};
+  try{if(!(await acquireEditLock('invoice',invoiceId))){alert(editLockConflictMessage('Diese Rechnung'));return}state=await loadFromSupabase();const latest=state.invoices.find(x=>x.id===invoiceId);candidate.updatedAt=latest.updatedAt;await saveInvoiceRecord(candidate,latest.updatedAt,true);await releaseCurrentEditLock();render('receipts');const saved=state.invoices.find(x=>x.id===invoiceId)?.receipt;notice(`Quittung ${saved?.number||''} erstellt.`)}catch(error){await releaseCurrentEditLock();alert(`Quittung konnte nicht erstellt werden: ${error.message}`)}
+};
+
+toggleArchive=async function(kind,id){
+  let record=state[kind]?.find(x=>x.id===id);if(!record)return;
+  if(!record.archived&&((kind==='orders'&&record.status!=='Abgeschlossen')||(kind==='invoices'&&record.status==='Offen'))){alert('Nur abgeschlossene Aufträge beziehungsweise bezahlte oder stornierte Rechnungen können archiviert werden.');return}
+  const entityType=kind==='customers'?'customer':kind==='orders'?'order':kind==='invoices'?'invoice':null;if(!entityType)return;
+  try{if(!(await acquireEditLock(entityType,id))){alert(editLockConflictMessage(kind==='customers'?'Dieser Kunde':kind==='orders'?'Dieser Auftrag':'Diese Rechnung'));return}state=await loadFromSupabase();record=state[kind].find(x=>x.id===id);const candidate={...record,archived:!record.archived};if(kind==='customers')await saveCustomerRecord(candidate,record.updatedAt,true);else if(kind==='orders')await saveOrderRecord(candidate,record.updatedAt,true);else await saveInvoiceRecord(candidate,record.updatedAt,true);notice(candidate.archived?'Archiviert.':'Wieder aktiviert.')}catch(error){alert(`Archivstatus konnte nicht gespeichert werden: ${error.message}`)}finally{await releaseCurrentEditLock()}render(currentView)
+};
+
+exportData=async function(){
+  const exportState={...state,lastExport:new Date().toISOString()},blob=new Blob([JSON.stringify(exportState,null,2)],{type:'application/json'}),link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=`atelier-wuffli-test-backup-${today()}.json`;link.click();URL.revokeObjectURL(link.href);notice('Test-Datensicherung exportiert.')
+};
 
 async function preparePdfLogo(source){
   if(!source)return '';
