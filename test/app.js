@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.43.0';
+const APP_VERSION='TEST V0.0.44.0';
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
 let state,currentView='dashboard',realtimeChannel=null,presenceChannel=null,presenceHeartbeat=null,versionHeartbeat=null,presenceUser=null,lastUserActivity=Date.now(),lastPresenceTrack=0,remoteRevision=0,isSaving=false,customerSort='number-asc',orderSort='number-desc',invoiceSort='number-desc',receiptSort='number-desc',financeMonth=new Date().toISOString().slice(0,7),activeEditLock=null,lockHeartbeat=null;
@@ -295,6 +295,10 @@ function bindGlobal(){
   $('#quick-export').onclick=exportData;
   $('#global-search-button').onclick=openGlobalSearch;
   $('#mobile-bottom-nav').onclick=e=>{const view=e.target.closest('[data-mobile-view]')?.dataset.mobileView,action=e.target.closest('[data-mobile-action]')?.dataset.mobileAction;if(view)render(view);else if(action==='create')openQuickActions();else if(action==='search')openGlobalSearch();else if(action==='more')openMoreMenu()};
+  const toggleMobileRowActions=e=>{if(!window.matchMedia('(max-width:900px)').matches||e.target.closest('button,a,input,select,textarea'))return;const row=e.target.closest('.table-wrap tbody tr');if(!row||!row.lastElementChild?.querySelector('button'))return;const opening=!row.classList.contains('mobile-actions-expanded');row.parentElement.querySelectorAll('.mobile-actions-expanded').forEach(other=>{other.classList.remove('mobile-actions-expanded');other.setAttribute('aria-expanded','false')});row.classList.toggle('mobile-actions-expanded',opening);row.setAttribute('aria-expanded',String(opening))};
+  $('#content').addEventListener('click',toggleMobileRowActions);
+  $('#content').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('.table-wrap tbody tr')){e.preventDefault();toggleMobileRowActions(e)}});
+  new MutationObserver(()=>$$('.table-wrap tbody tr').forEach(row=>{if(row.lastElementChild?.querySelector('button')&&!row.hasAttribute('tabindex')){row.tabIndex=0;row.setAttribute('aria-expanded','false')}})).observe($('#content'),{childList:true,subtree:true});
   $('#reload-button').onclick=async()=>{
     if($('#modal').open&&!confirm('Das Formular ist noch geöffnet. Nicht gespeicherte Eingaben verwerfen und die Seite neu laden?'))return;
     await releaseCurrentEditLock();

@@ -35,3 +35,5 @@ Die zugehörige Testmigration liegt unter `supabase/test-record-storage-v0037.sq
 `TEST V0.0.42.0` ergänzt einen dauerhaften Papierkorb für gelöschte Kunden, Aufträge, Rechnungen, Quittungen und Ausgaben. Einträge können in sicherer Abhängigkeitsreihenfolge wiederhergestellt werden. Auf Smartphones lässt sich der vollständige Funktionsbaum wieder über die Menüschaltfläche ein- und ausblenden. Die Migration liegt unter `supabase/test-trash-v0042.sql`.
 
 `TEST V0.0.43.0` macht die vier Kennzahlenkarten auf der Übersicht direkt bedienbar. Kunden und Aufträge führen in ihren jeweiligen Bereich; offene Rechnungen und offener Betrag öffnen die Rechnungsübersicht. Die Karten sind auch per Tastatur erreichbar.
+
+`TEST V0.0.44.0` stellt Datensatzaktionen auf Smartphones platzsparend dar. Die verfügbaren Aktionen eines Kunden, Termins, Auftrags, einer Rechnung, Quittung oder Ausgabe erscheinen erst nach Auswahl der betreffenden Karte; gleichzeitig bleibt höchstens ein Aktionsbereich geöffnet. Desktoplisten bleiben unverändert.
