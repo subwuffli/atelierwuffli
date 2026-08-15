@@ -165,7 +165,7 @@ function customerGreeting(document){
   return `Guten Tag ${name},`
 }
 async function deliverPdf(doc,fileName){
-  const blob=doc.output('blob'),file=new File([blob],fileName,{type:'application/pdf'}),mobile=window.matchMedia?.('(pointer: coarse)').matches||window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;
+  const blob=doc.output('blob'),file=new File([blob],fileName,{type:'application/pdf'}),mobile=window.matchMedia?.('(max-width:900px)').matches||window.matchMedia?.('(pointer: coarse)').matches||window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;
   if(mobile){
     const blobUrl=URL.createObjectURL(blob),canShare=Boolean(navigator.share&&navigator.canShare?.({files:[file]})),overlay=document.createElement('div');overlay.className='pdf-preview-view';overlay.innerHTML=`<div class="pdf-preview-controls"><button type="button" class="secondary" data-pdf-close>Schliessen</button><strong>${esc(fileName)}</strong><button type="button" class="primary" data-pdf-action>${canShare?'PDF teilen':'PDF herunterladen'}</button></div><iframe title="PDF-Vorschau ${esc(fileName)}" src="${blobUrl}"></iframe>`;
     document.body.appendChild(overlay);
