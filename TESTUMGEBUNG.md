@@ -39,3 +39,5 @@ Die zugehörige Testmigration liegt unter `supabase/test-record-storage-v0037.sq
 `TEST V0.0.44.0` stellt Datensatzaktionen auf Smartphones platzsparend dar. Die verfügbaren Aktionen eines Kunden, Termins, Auftrags, einer Rechnung, Quittung oder Ausgabe erscheinen erst nach Auswahl der betreffenden Karte; gleichzeitig bleibt höchstens ein Aktionsbereich geöffnet. Desktoplisten bleiben unverändert.
 
 `TEST V0.0.45.0` verschiebt die Bedienleiste der mobilen PDF-Vorschau an den unteren Bildschirmrand. Dateiname sowie die mindestens 48 px hohen Schaltflächen zum Schließen und Teilen beziehungsweise Herunterladen bleiben dadurch auch mit mobilen Browserleisten und iPhone-Sicherheitsabstand erreichbar.
+
+`TEST V0.0.45.1` erkennt die mobile PDF-Vorschau zusätzlich anhand der Bildschirmbreite und damit zuverlässig auch auf Geräten, die ihre Touch-Eigenschaften nicht korrekt melden.
