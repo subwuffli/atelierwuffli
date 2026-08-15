@@ -29,3 +29,5 @@ Die zugehörige Testmigration liegt unter `supabase/test-record-storage-v0037.sq
 `TEST V0.0.39.0` ergänzt eine globale Suche über Kunden, Belegnummern, Referenzen, Artikel, Beträge und Ausgaben. Auf Smartphones steht eine Navigation mit fünf Zielen, einer zentralen Schnellaktion und mindestens 48 px grossen Touch-Zielen zur Verfügung; weitere Bereiche öffnen sich über „Mehr“.
 
 `TEST V0.0.40.0` führt eine Mitglieder-Allowlist und strengere Row-Level-Security ein. Nur ausdrücklich freigegebene ERP-Mitglieder sehen Geschäftsdaten. Physisches Löschen der Hauptdatensätze ist für Browserbenutzer auf Datenbankebene gesperrt. Der Sicherheitsstatus zeigt Rolle, Mandant, Audit-Schutz und MFA-Stand. Die Migration liegt unter `supabase/test-security-baseline-v0040.sql`.
+
+`TEST V0.0.41.0` ergänzt interne Datenbank-Snapshots, einen strukturellen Wiederherstellungstest, Betriebsstatus sowie zentrale JavaScript-Fehlerprotokolle mit Rate-Limit. Der erste Snapshot wurde erfolgreich als `valid` geprüft. Die Migration liegt unter `supabase/test-operations-v0041.sql`.
