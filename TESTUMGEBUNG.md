@@ -23,3 +23,5 @@ Die Publishable Keys der Browser-Apps dürfen öffentlich sein. Secret- und Serv
 `TEST V0.0.37.0` speichert Kunden, Aufträge, Rechnungen, Quittungen, Ausgaben und Einstellungen datensatzweise. Auftrag samt Positionen sowie Rechnung samt Positionen und Quittung werden jeweils in einer Datenbanktransaktion gespeichert. Gleichzeitige Änderungen werden über Sperren und den Zeitstempel `updated_at` erkannt, statt fremde Änderungen zu überschreiben.
 
 Die zugehörige Testmigration liegt unter `supabase/test-record-storage-v0037.sql` und ist ausschliesslich im Supabase-Testprojekt installiert.
+
+`TEST V0.0.38.0` ergänzt sichere Löschungen ohne physisches Entfernen. Gelöschte Datensätze werden aus Listen, Auswertungen und PDF-Berichten ausgeschlossen und können unmittelbar über „Rückgängig“ wiederhergestellt werden. Ein unveränderbares Audit-Log protokolliert Änderungen mit Zeitpunkt, Benutzer sowie altem und neuem Datenstand. Die Migration liegt unter `supabase/test-soft-delete-audit-v0038.sql`.
