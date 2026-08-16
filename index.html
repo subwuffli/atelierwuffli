@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#6d3f2b">
   <title>Atelier Wuffli ERP</title>
-  <link rel="stylesheet" href="styles.css?v=0.0.36">
+  <link rel="stylesheet" href="styles.css?v=0.0.49.0">
 </head>
 <body>
   <div id="lock-screen" class="lock-screen">
@@ -43,26 +43,35 @@
         <button data-view="expenses">Ausgaben</button>
         <button data-view="income">Einnahmen</button>
         <button data-view="settings">Einstellungen</button>
+        <button data-view="trash">Papierkorb</button>
       </nav>
       <section id="active-users" class="active-users" aria-live="polite">
         <button id="active-users-toggle" class="active-users-toggle" type="button" aria-expanded="true"><span>Aktive Benutzer</span><strong id="active-users-count">0</strong></button>
         <div id="active-users-list" class="active-users-list"><span class="active-users-empty">Verbindung wird aufgebaut …</span></div>
       </section>
       <button id="reload-button" class="secondary reload-button">Neu laden</button>
-      <div id="app-version" class="app-version" aria-label="App-Version">V0.0.36</div>
+      <div id="app-version" class="app-version" aria-label="App-Version">V0.0.49.0</div>
       <button id="lock-button" class="secondary">Sperren</button>
     </aside>
     <main>
-      <header class="topbar"><button id="menu-button" aria-label="Menü">☰</button><div><p class="eyebrow">SUPABASE CLOUD-DATENBANK</p><h1 id="page-title">Übersicht</h1></div><button id="quick-export" class="secondary">Daten exportieren</button></header>
+      <header class="topbar"><button id="menu-button" aria-label="Menü">☰</button><div><p class="eyebrow">SUPABASE CLOUD-DATENBANK</p><h1 id="page-title">Übersicht</h1></div><div class="topbar-actions"><button id="global-search-button" class="secondary">Suchen</button><button id="quick-export" class="secondary">Daten exportieren</button></div></header>
       <div id="notice" class="notice hidden"></div>
       <section id="content"></section>
     </main>
   </div>
 
+  <nav id="mobile-bottom-nav" class="mobile-bottom-nav" aria-label="Mobile Navigation">
+    <button type="button" data-mobile-view="dashboard"><span>⌂</span>Home</button>
+    <button type="button" data-mobile-view="appointments"><span>□</span>Termine</button>
+    <button type="button" class="mobile-create" data-mobile-action="create" aria-label="Schnell erfassen"><span>＋</span></button>
+    <button type="button" data-mobile-action="search"><span>⌕</span>Suche</button>
+    <button type="button" data-mobile-action="more"><span>☰</span>Mehr</button>
+  </nav>
+
   <dialog id="modal"><div class="modal-shell"><header><h2 id="modal-title"></h2><button type="button" onclick="closeModal()" aria-label="Schliessen">×</button></header><div id="modal-body"></div></div></dialog>
   <input id="import-file" type="file" accept="application/json,.json" hidden>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
-  <script src="app.js?v=0.0.36"></script>
+  <script src="app.js?v=0.0.49.0"></script>
 </body>
 </html>
