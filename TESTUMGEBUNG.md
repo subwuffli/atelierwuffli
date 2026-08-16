@@ -47,3 +47,5 @@ Die zugehörige Testmigration liegt unter `supabase/test-record-storage-v0037.sq
 `TEST V0.0.47.0` ermittelt die zu einem Auftrag gehörende Rechnung und Quittung zuverlässig über beide Datenbankverknüpfungen. Die Detailansicht besitzt nun eine eigene Navigation: Von einem Auftrag zur Rechnung oder Quittung gewechselt führt „Zum vorherigen Dokument“ zuerst zurück zur vorherigen Detailansicht und erst danach zurück zur ursprünglichen Liste.
 
 `TEST V0.0.48.0` integriert Rechnung und Zahlung direkt in die Auftragsdetailansicht. Rechnungsdatum, Fälligkeit, Status, Zahlungsdatum, Zahlungsart und Rechnungstext können ohne Bereichswechsel bearbeitet werden. Eine Quittung kann beim Abschluss direkt erstellt werden; vorhandene Quittungen werden automatisch aktualisiert. Die Datenbanksperre bleibt dabei auf der Rechnung aktiv.
+
+`TEST V0.0.49.0` korrigiert mobile Größenprobleme bei langen Formularen. Dialoghöhe, Scrollbereich, Kopfzeile und sichere Aktionsleiste verwenden dynamische iPhone-Viewport-Höhen und Safe-Area-Abstände; Eingabefelder verhindern unerwünschtes Browser-Zoomen. Lange Kennzahlen bleiben innerhalb ihrer Karten.

@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.48.0';
+const APP_VERSION='TEST V0.0.49.0';
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
 let state,currentView='dashboard',realtimeChannel=null,presenceChannel=null,presenceHeartbeat=null,versionHeartbeat=null,presenceUser=null,lastUserActivity=Date.now(),lastPresenceTrack=0,remoteRevision=0,isSaving=false,customerSort='number-asc',orderSort='number-desc',invoiceSort='number-desc',receiptSort='number-desc',financeMonth=new Date().toISOString().slice(0,7),activeEditLock=null,lockHeartbeat=null;
@@ -150,7 +150,7 @@ function openMoreMenu(){const destinations=[['customers','Kunden'],['orders','Au
 function notice(msg){const n=$('#notice');n.textContent=msg;n.classList.remove('hidden');setTimeout(()=>n.classList.add('hidden'),3500)}
 function undoNotice(msg,onUndo){const n=$('#notice');n.innerHTML=`<span>${esc(msg)}</span> <button type="button" class="secondary" id="undo-action">Rückgängig</button>`;n.classList.remove('hidden');const button=$('#undo-action'),timer=setTimeout(()=>n.classList.add('hidden'),8000);button.onclick=async()=>{button.disabled=true;clearTimeout(timer);try{await onUndo();notice('Löschung rückgängig gemacht.')}catch(error){alert(`Wiederherstellung fehlgeschlagen: ${error.message}`)}}}
 function setTitle(t){$('#page-title').textContent=t}
-function modal(title,html){$('#modal-title').textContent=title;$('#modal-body').innerHTML=html;$('#modal').showModal()}
+function modal(title,html){$('#modal-title').textContent=title;$('#modal-body').innerHTML=html;$('#modal-body').scrollTop=0;$('#modal').showModal()}
 async function closeModal(){await releaseCurrentEditLock();if($('#modal').open)$('#modal').close();if(remoteRevision>state.revision&&!isSaving)await reloadCloudData()}
 function fields(obj,names){return names.map(([key,label,type='text',span=false,extra=''])=>`<label class="${span?'span-2':''}">${label}<input name="${key}" type="${type}" value="${esc(obj?.[key]||'')}" ${extra}></label>`).join('')}
 function salutationSelect(value='',id=''){
