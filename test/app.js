@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.52.0';
+const APP_VERSION='TEST V0.0.53.0';
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
 let state,currentView='dashboard',realtimeChannel=null,presenceChannel=null,presenceHeartbeat=null,versionHeartbeat=null,presenceUser=null,lastUserActivity=Date.now(),lastPresenceTrack=0,remoteRevision=0,isSaving=false,customerSort='number-asc',orderSort='number-desc',invoiceSort='number-desc',receiptSort='number-desc',financeMonth=new Date().toISOString().slice(0,7),activeEditLock=null,lockHeartbeat=null;
@@ -658,7 +658,7 @@ orderForm=async function(id){
     const originalSubmit=form.onsubmit,existing=id?state.orders.find(x=>x.id===id):null,expectedUpdatedAt=existing?.updatedAt||null;
     form.onsubmit=async event=>{
       const cloudSave=save,cloudClose=closeModal,submit=form.querySelector('button.primary');save=async()=>{};closeModal=async()=>{};submit.disabled=true;submit.textContent='Wird gespeichert …';
-      try{await originalSubmit(event);const order=id?state.orders.find(x=>x.id===id):state.orders[state.orders.length-1];if(typeof order.number!=='string')order.number='';await saveOrderRecord(order,expectedUpdatedAt,Boolean(existing));await cloudClose();renderSortableOrders();const invoice=state.invoices.find(x=>x.orderId===order.id);notice(invoice?.receipt?'Auftrag, Rechnung und Quittung aktualisiert.':invoice?'Auftrag und verknüpfte Rechnung aktualisiert.':'Auftrag gespeichert.')}catch(error){alert(`Auftrag konnte nicht gespeichert werden: ${error.message}`)}finally{save=cloudSave;closeModal=cloudClose;submit.disabled=false;submit.textContent='Speichern'}
+      try{await originalSubmit(event);const order=id?state.orders.find(x=>x.id===id):state.orders[state.orders.length-1];if(typeof order.number!=='string')order.number='';await saveOrderRecord(order,expectedUpdatedAt,Boolean(existing));await cloudClose();renderSortableOrders();const invoice=state.invoices.find(x=>x.orderId===order.id);notice(invoice?.receipt?'Auftrag, Rechnung und Quittung aktualisiert.':invoice?'Auftrag und verknüpfte Rechnung aktualisiert.':'Auftrag gespeichert.')}catch(error){console.error('Auftrag konnte nicht gespeichert werden:',error);logClientError(error?.message||error,{action:'save_order_subscription'});let box=$('#order-save-error');if(!box){box=document.createElement('p');box.id='order-save-error';box.className='error span-2';form.querySelector('.form-actions')?.before(box)}box.textContent=`Auftrag konnte nicht gespeichert werden: ${error?.message||'Unbekannter Fehler'}`}finally{save=cloudSave;closeModal=cloudClose;submit.disabled=false;submit.textContent='Speichern'}
     };
   }
   if(form){
