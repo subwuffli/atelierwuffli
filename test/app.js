@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.53.0';
+const APP_VERSION='TEST V0.0.54.0';
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
 let state,currentView='dashboard',realtimeChannel=null,presenceChannel=null,presenceHeartbeat=null,versionHeartbeat=null,presenceUser=null,lastUserActivity=Date.now(),lastPresenceTrack=0,remoteRevision=0,isSaving=false,customerSort='number-asc',orderSort='number-desc',invoiceSort='number-desc',receiptSort='number-desc',financeMonth=new Date().toISOString().slice(0,7),activeEditLock=null,lockHeartbeat=null;
@@ -359,7 +359,7 @@ async function calculateDeliveryRoute(startAddress,targetAddress){
   const start=await geocodeAddress(startAddress),target=await geocodeAddress(targetAddress),response=await fetch(`https://router.project-osrm.org/route/v1/driving/${start.lon},${start.lat};${target.lon},${target.lat}?overview=false&steps=false`);if(!response.ok)throw new Error('Routenberechnung ist momentan nicht erreichbar.');const result=await response.json(),route=result.routes?.[0];if(result.code!=='Ok'||!route)throw new Error('Für diese Adressen wurde keine Fahrstrecke gefunden.');const value={distanceKm:route.distance/1000,durationMin:Math.round(route.duration/60),start,target};cache[key]=value;saveRouteCache(cache);return value;
 }
 let appointmentView='list',appointmentMonth=today().slice(0,7);
-const orderDates=order=>[...new Set((order?.fulfilmentDates?.length?order.fulfilmentDates:[order?.fulfilmentDate]).filter(Boolean))].sort();
+const orderDates=order=>{let values=order?.fulfilmentDates;if(typeof values==='string'){try{values=JSON.parse(values)}catch{values=[]}}if(!Array.isArray(values)||!values.length)values=[order?.fulfilmentDate];return [...new Set(values.filter(Boolean))].sort()};
 const orderDatesLabel=order=>orderDates(order).map(date).join(', ');
 const openAppointments=()=>state.orders.filter(o=>!o.archived&&o.status!=='Abgeschlossen').flatMap(order=>orderDates(order).map(fulfilmentDate=>({...order,fulfilmentDate}))).sort((a,b)=>a.fulfilmentDate.localeCompare(b.fulfilmentDate)||String(a.number).localeCompare(String(b.number),'de-CH'));
 function appointmentRows(rows){return rows.length?`<div class="table-wrap"><table><thead><tr><th>Datum</th><th>Art</th><th>Kunde</th><th>Auftrag</th><th>Status</th><th></th></tr></thead><tbody>${rows.map(order=>`<tr><td><strong>${date(order.fulfilmentDate)}</strong></td><td><span class="badge ${order.fulfilment==='Lieferung'?'warn':'ok'}">${esc(order.fulfilment)}</span></td><td>${esc(order.customerSnapshot?.name||'')}</td><td>${esc(order.number)}</td><td>${esc(order.status)}</td><td><button class="secondary" onclick="orderForm('${order.id}')">Öffnen</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="card empty">Keine offenen Termine an diesem Tag.</div>'}
