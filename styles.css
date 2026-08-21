@@ -21,6 +21,7 @@
 button{min-height:42px}
 .primary,.secondary,.danger,.text-button{display:inline-flex;align-items:center;justify-content:center;line-height:1.2}
 input,select,textarea{min-width:0;min-height:42px}
+.address-suggestions{display:grid;max-height:230px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;background:#fff;box-shadow:0 12px 28px rgba(40,34,31,.14)}.address-suggestions.hidden{display:none}.address-suggestions button{min-height:44px;padding:10px 12px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:#fff;color:var(--ink);text-align:left}.address-suggestions button:last-child{border-bottom:0}.address-suggestions button:hover,.address-suggestions button:focus-visible{background:#f6efea}.address-suggestions span{display:block;margin-top:2px;color:var(--muted);font-size:.8rem}
 .form-grid>*{min-width:0}
 .modal-shell{box-sizing:border-box;width:min(900px,calc(100vw - 32px));min-width:0;max-width:900px;overflow:hidden!important}
 #modal{box-sizing:border-box;width:min(900px,calc(100vw - 32px));max-width:calc(100vw - 32px);padding:0;overflow:hidden}.modal-shell{width:100%;max-width:none}
