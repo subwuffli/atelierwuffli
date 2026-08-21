@@ -1,0 +1,8 @@
+{
+  "features": [
+    {"name":"Adresssuche", "app":["function mountAddressAutocomplete"], "css":[".address-suggestions"]},
+    {"name":"Persoenliche Einstellungen", "app":["function saveUserPreferences","financeMonth=e.target.value;saveUserPreferences()"], "testMigration":"test-user-preferences-v0044.sql", "liveMigration":"live-user-preferences-v0053.sql"},
+    {"name":"Positionsvorlagen", "app":["function openPositionTemplates"], "css":[".template-row"], "testMigration":"test-position-templates-v0045.sql", "liveMigration":"live-position-templates-v0054.sql"},
+    {"name":"Terminkalender und Abos", "app":["function renderAppointmentCalendar","save_order_subscription_v1"], "css":[".appointment-calendar",".subscription-dates"], "testMigration":"test-order-subscriptions-v0052.sql", "liveMigration":"live-order-subscriptions-v0055.sql"}
+  ]
+}

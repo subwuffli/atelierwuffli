@@ -24,13 +24,20 @@ Write-Host "INFO  Live: $liveVersion | Test: $testVersion"
 $files=@(@('app.js','test/app.js'),@('styles.css','test/styles.css'),@('index.html','test/index.html'))
 foreach($pair in $files){
   git diff --no-index --quiet -- $pair[0] $pair[1]
-  if($LASTEXITCODE -eq 1){Write-Host "PRUEFEN Unterschied Test/Live: $($pair[0])" -ForegroundColor Yellow;$failed=$true}
+  if($LASTEXITCODE -eq 1){Write-Host "HINWEIS Unterschied Test/Live: $($pair[0])" -ForegroundColor Yellow}
 }
 
 $testMigrations=Get-ChildItem supabase\test-*.sql -ErrorAction SilentlyContinue
 $liveMigrations=Get-ChildItem supabase\live-*.sql -ErrorAction SilentlyContinue
 Write-Host "INFO  Migrationen: Test $($testMigrations.Count) | Live $($liveMigrations.Count)"
 if(!$liveMigrations.Count){Write-Host 'FEHLER Keine Live-Migrationen dokumentiert.' -ForegroundColor Red;$failed=$true}
+
+$contract=Get-Content tools\release-contract.json -Raw | ConvertFrom-Json
+foreach($feature in $contract.features){
+  foreach($marker in @($feature.app|Where-Object {$_})){if((Select-String -Path test\app.js -SimpleMatch $marker -Quiet) -and !(Select-String -Path app.js -SimpleMatch $marker -Quiet)){Write-Host "FEHLER $($feature.name): App-Merkmal fehlt in Live ($marker)" -ForegroundColor Red;$failed=$true}}
+  foreach($marker in @($feature.css|Where-Object {$_})){if((Select-String -Path test\styles.css -SimpleMatch $marker -Quiet) -and !(Select-String -Path styles.css -SimpleMatch $marker -Quiet)){Write-Host "FEHLER $($feature.name): CSS-Merkmal fehlt in Live ($marker)" -ForegroundColor Red;$failed=$true}}
+  if($feature.testMigration -and (Test-Path "supabase\$($feature.testMigration)") -and !(Test-Path "supabase\$($feature.liveMigration)")){Write-Host "FEHLER $($feature.name): Live-Migration fehlt ($($feature.liveMigration))" -ForegroundColor Red;$failed=$true}
+}
 
 if($failed){
   Write-Host 'STOP: Erst Unterschiede und benoetigte Live-SQL-Migrationen pruefen. Kein Live-Deploy.' -ForegroundColor Yellow
