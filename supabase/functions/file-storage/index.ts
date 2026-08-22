@@ -12,7 +12,7 @@ Deno.serve(async req=>{
   const {data:{user}}=await userClient.auth.getUser();
   if(!user)return response(JSON.stringify({error:"AUTH_REQUIRED"}),401,{"Content-Type":"application/json"});
   const admin=createClient(Deno.env.get("SUPABASE_URL")||"",Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"");
-  const {data:member}=await admin.from("erp_members").select("user_id").eq("user_id",user.id).eq("active",true).maybeSingle();
+  const {data:member}=await userClient.from("erp_members").select("user_id").eq("user_id",user.id).eq("active",true).maybeSingle();
   if(!member)return response(JSON.stringify({error:"MEMBER_REQUIRED"}),403,{"Content-Type":"application/json"});
 
   const url=new URL(req.url),action=url.searchParams.get("action");
