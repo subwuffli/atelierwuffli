@@ -12,8 +12,6 @@ Deno.serve(async req=>{
   const {data:{user}}=await userClient.auth.getUser();
   if(!user)return response(JSON.stringify({error:"AUTH_REQUIRED"}),401,{"Content-Type":"application/json"});
   const admin=createClient(Deno.env.get("SUPABASE_URL")||"",Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"");
-  const {data:member}=await userClient.from("erp_members").select("user_id").eq("user_id",user.id).eq("active",true).maybeSingle();
-  if(!member)return response(JSON.stringify({error:"MEMBER_REQUIRED"}),403,{"Content-Type":"application/json"});
 
   const url=new URL(req.url),action=url.searchParams.get("action");
   if(action==="download"){
@@ -25,7 +23,7 @@ Deno.serve(async req=>{
 
   const form=await req.formData(),entityType=String(form.get("entityType")||""),entityId=String(form.get("entityId")||""),file=form.get("file");
   if(!(entityType in allowed)||!entityId||!(file instanceof File)||file.size>8_000_000||(!file.type.startsWith("image/")&&file.type!=="application/pdf"))return response(JSON.stringify({error:"INVALID_FILE"}),400,{"Content-Type":"application/json"});
-  const {data:parent}=await admin.from(allowed[entityType as keyof typeof allowed]).select("id,deleted_at").eq("id",entityId).maybeSingle();
+  const {data:parent}=await userClient.from(allowed[entityType as keyof typeof allowed]).select("id,deleted_at").eq("id",entityId).maybeSingle();
   if(!parent||parent.deleted_at)return response(JSON.stringify({error:"PARENT_NOT_FOUND"}),404,{"Content-Type":"application/json"});
   const source=String(form.get("source")||"upload");if(source!=="upload"&&source!=="generated_pdf")return response(JSON.stringify({error:"INVALID_SOURCE"}),400,{"Content-Type":"application/json"});
   const version=source==="generated_pdf"?(await admin.from("file_attachments").select("id",{count:"exact",head:true}).eq("entity_type",entityType).eq("entity_id",entityId).eq("source",source)).count!+1:null;
