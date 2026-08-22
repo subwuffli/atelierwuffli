@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { GetObjectCommand, PutObjectCommand, S3Client } from "npm:@aws-sdk/client-s3@3.823.0";
 
-const cors={"Access-Control-Allow-Origin":"https://subwuffli.github.io","Access-Control-Allow-Headers":"authorization, content-type"};
+const cors={"Access-Control-Allow-Origin":"https://subwuffli.github.io","Access-Control-Allow-Headers":"authorization, apikey, content-type, x-client-info","Access-Control-Allow-Methods":"POST, OPTIONS"};
 const allowed={order:"orders",invoice:"invoices",receipt:"receipts",expense:"expenses"} as const;
 const r2=new S3Client({region:"auto",endpoint:`https://${Deno.env.get("R2_ACCOUNT_ID")}.r2.cloudflarestorage.com`,credentials:{accessKeyId:Deno.env.get("R2_ACCESS_KEY_ID")||"",secretAccessKey:Deno.env.get("R2_SECRET_ACCESS_KEY")||""}});
 const response=(body:BodyInit|null,status=200,headers={})=>new Response(body,{status,headers:{...cors,...headers}});
