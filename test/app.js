@@ -175,6 +175,14 @@ function customerGreeting(document){
   if(salutation==='sie'||salutation==='frau')return `Liebe ${name},`;
   return `Guten Tag ${name},`
 }
+async function storeGeneratedPdf(type,record,doc){
+  const data=new FormData();data.append('entityType',type);data.append('entityId',record.id);data.append('source','generated_pdf');data.append('file',new File([doc.output('blob')],`${record.number}.pdf`,{type:'application/pdf'}));
+  const {error}=await supabaseClient.functions.invoke('file-storage',{body:data});if(error)throw error;
+}
+async function uploadAttachment(type,id,file){
+  const data=new FormData();data.append('entityType',type);data.append('entityId',id);data.append('source','upload');data.append('file',file);
+  const {error}=await supabaseClient.functions.invoke('file-storage',{body:data});if(error)throw error;
+}
 async function deliverPdf(doc,fileName){
   const blob=doc.output('blob'),file=new File([blob],fileName,{type:'application/pdf'}),mobile=window.matchMedia?.('(max-width:900px)').matches||window.matchMedia?.('(pointer: coarse)').matches||window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;
   if(mobile){
@@ -741,7 +749,7 @@ expenseForm=async function(id){
   }
   originalExpenseForm(id);
   const form=$('#expense-form'),expense=id?state.expenses.find(x=>x.id===id):null,expectedUpdatedAt=expense?.updatedAt||null;
-  if(form){const originalSubmit=form.onsubmit;form.onsubmit=async event=>{const cloudSave=save,cloudClose=closeModal,submit=form.querySelector('button.primary');save=async()=>{};closeModal=async()=>{};submit.disabled=true;submit.textContent='Wird gespeichert …';try{await originalSubmit(event);const record=id?state.expenses.find(x=>x.id===id):state.expenses[state.expenses.length-1];await saveExpenseRecord(record,expectedUpdatedAt,Boolean(expense));await cloudClose();financeMonth=monthKey(record.date);saveUserPreferences();renderExpenses();notice('Ausgabe gespeichert.')}catch(error){alert(`Ausgabe konnte nicht gespeichert werden: ${error.message}`)}finally{save=cloudSave;closeModal=cloudClose;submit.disabled=false;submit.textContent='Speichern'}}}
+  if(form){form.querySelector('.form-actions')?.insertAdjacentHTML('beforebegin','<label class="span-2">Belege anhängen <input name="attachments" type="file" accept="application/pdf,image/*" multiple><span class="hint">PDF oder Bild, maximal 8 MB pro Datei.</span></label>');const originalSubmit=form.onsubmit;form.onsubmit=async event=>{event.preventDefault();const files=[...form.elements.attachments.files];if(files.some(file=>file.size>8_000_000)){alert('Ein Beleg darf maximal 8 MB gross sein.');return}const cloudSave=save,cloudClose=closeModal,submit=form.querySelector('button.primary');save=async()=>{};closeModal=async()=>{};submit.disabled=true;submit.textContent='Wird gespeichert …';try{await originalSubmit(event);const record=id?state.expenses.find(x=>x.id===id):state.expenses[state.expenses.length-1];await saveExpenseRecord(record,expectedUpdatedAt,Boolean(expense));for(const file of files)await uploadAttachment('expense',record.id,file);await cloudClose();financeMonth=monthKey(record.date);saveUserPreferences();renderExpenses();notice(files.length?'Ausgabe und Beleg gespeichert.':'Ausgabe gespeichert.')}catch(error){alert(`Ausgabe konnte nicht gespeichert werden: ${error.message}`)}finally{save=cloudSave;closeModal=cloudClose;submit.disabled=false;submit.textContent='Speichern'}}}
 };
 const SETTINGS_LOCK_ID='00000000-0000-0000-0000-000000000001';
 const originalRenderCloudSettings=renderCloudSettings;
@@ -830,7 +838,7 @@ async function pdfDocument(type,id){
     else if(isInv){doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Rechnungsinformationen',20,225);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);[...companyLines,`Zahlbar bis ${date(d.dueDate)}`,`Referenz: ${d.number}`].forEach((line,index)=>doc.text(line,20,233+index*4.5));if(bankLines.length){doc.setTextColor(...ink);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Bankinformationen',112,225);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);bankLines.forEach((line,index)=>doc.text(line,112,233+index*4.5))}}
     else{doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Auftragsinformationen',20,225);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);const info=[...companyLines,`${d.fulfilment||'Erfüllung'} am ${date(d.fulfilmentDate)}`];if(d.text)info.push(...doc.splitTextToSize(String(d.text),75));info.forEach((line,index)=>doc.text(line,20,233+index*4.5))}
     doc.setTextColor(...ink);doc.setFont('times','italic');doc.setFontSize(isReceipt?24:20);doc.text('Vielen Dank!',105,270,{align:'center'});
-    await deliverPdf(doc,`${d.number}.pdf`);return;
+    await storeGeneratedPdf(type,d,doc);await deliverPdf(doc,`${d.number}.pdf`);return;
   }
   let y=18;
   if(s.logo){try{const logoData=s.logo.startsWith('data:')?s.logo:await fetch(s.logo).then(r=>r.blob()).then(blob=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(blob)}));doc.addImage(logoData,undefined,15,y,34,34,'logo','FAST')}catch(error){console.warn('Logo konnte nicht ins PDF eingefügt werden:',error)}}
@@ -843,7 +851,7 @@ async function pdfDocument(type,id){
   y+=5;doc.setFontSize(13);doc.text(`Gesamtbetrag: ${money(d.total)}`,193,y,{align:'right'});y+=12;doc.setFontSize(10);
   if(d.text){doc.text(doc.splitTextToSize(String(d.text),175),15,y);y+=15}
   if(isReceipt){doc.setFontSize(12);doc.text('Der Rechnungsbetrag wurde vollständig bezahlt.',15,y);doc.setFontSize(10);doc.text(`Rechnung: ${d.invoiceNumber}`,15,y+8)}else if(isInv){doc.text(`Zahlbar bis ${date(d.dueDate)}`,15,y);doc.text(`IBAN: ${s.iban||''}`,15,y+6);doc.text(`Referenz: ${d.number}`,15,y+12)}
-  await deliverPdf(doc,`${d.number}.pdf`);
+  await storeGeneratedPdf(type,d,doc);await deliverPdf(doc,`${d.number}.pdf`);
 }
 printDocument=async function(type,id){
   const invoice=state.invoices.find(x=>x.id===id),d=type==='order'?state.orders.find(x=>x.id===id):type==='receipt'?invoice?.receipt:invoice;if(!d)return;
