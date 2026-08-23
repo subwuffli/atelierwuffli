@@ -8,13 +8,15 @@ const response=(body:BodyInit|null,status=200,headers={})=>new Response(body,{st
 const adminKey=(()=>{try{const keys=Object.values(JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")||"{}"));return keys.find(key=>typeof key==="string"&&key.startsWith("sb_secret_"))||keys.find(key=>typeof key==="string")||Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||""}catch{return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||""}})();
 const clean=(value:string)=>value.replace(/[^a-zA-Z0-9._-]/g,"_").slice(-120);
 async function storageNames(type:keyof typeof allowed,id:string,admin:ReturnType<typeof createClient>){
-  const label={order:"Auftrag",invoice:"Rechnung",receipt:"Quittung",expense:"Beleg"}[type];
-  if(type==="expense")return {folder:"Ausgaben",label};
+  if(type==="expense"){
+    const {data}=await admin.from("expenses").select("number").eq("id",id).single();
+    return {root:"ausgaben",folder:clean(data?.number||id),number:clean(data?.number||id)};
+  }
   const {data:document}=await admin.from(allowed[type]).select(type==="receipt"?"number,invoice_id,invoice_number":type==="invoice"?"number,order_number":"number").eq("id",id).single();
   let folder=document?.number||id;
   if(type==="invoice")folder=document?.order_number||folder;
   if(type==="receipt"){const {data:invoice}=await admin.from("invoices").select("order_number").eq("id",document?.invoice_id||"").maybeSingle();folder=invoice?.order_number||document?.invoice_number||folder}
-  return {folder:clean(folder),label:document?.number?`${label}-${clean(document.number)}`:label};
+  return {root:"auftraege",folder:clean(folder),number:clean(document?.number||id)};
 }
 
 Deno.serve(async req=>{
@@ -40,7 +42,7 @@ Deno.serve(async req=>{
   if(!parent||parent.deleted_at)return response(JSON.stringify({error:"PARENT_NOT_FOUND"}),404,{"Content-Type":"application/json"});
   const source=String(form.get("source")||"upload");if(source!=="upload"&&source!=="generated_pdf")return response(JSON.stringify({error:"INVALID_SOURCE"}),400,{"Content-Type":"application/json"});
   const version=source==="generated_pdf"?(await admin.from("file_attachments").select("id",{count:"exact",head:true}).eq("entity_type",entityType).eq("entity_id",entityId).eq("source",source)).count!+1:null;
-  const names=await storageNames(entityType as keyof typeof allowed,entityId,admin),safe=clean(file.name),key=`test/${names.folder}/${names.label}-${crypto.randomUUID()}-${safe}`;
+  const names=await storageNames(entityType as keyof typeof allowed,entityId,admin),safe=clean(file.name),parts=names.number.split('-'),year=`20${parts[1]||'00'}`,month=parts[2]||'00',key=`test/${names.root}/${year}/${month}/${names.folder}/${names.number}-${crypto.randomUUID()}-${safe}`;
   await r2.send(new PutObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:key,Body:new Uint8Array(await file.arrayBuffer()),ContentType:file.type}));
   const {data:saved,error}=await admin.from("file_attachments").insert({entity_type:entityType,entity_id:entityId,file_name:file.name,content_type:file.type,byte_size:file.size,storage_key:key,source,version,created_by:user.id}).select("id,file_name,created_at,version").single();
   if(error)throw error;
