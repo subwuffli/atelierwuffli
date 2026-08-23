@@ -5,13 +5,15 @@ const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"au
 const allowed={order:"orders",invoice:"invoices",receipt:"receipts",expense:"expenses"} as const;
 const r2=new S3Client({region:"auto",endpoint:`https://${Deno.env.get("R2_ACCOUNT_ID")}.r2.cloudflarestorage.com`,credentials:{accessKeyId:Deno.env.get("R2_ACCESS_KEY_ID")||"",secretAccessKey:Deno.env.get("R2_SECRET_ACCESS_KEY")||""}});
 const response=(body:BodyInit|null,status=200,headers={})=>new Response(body,{status,headers:{...cors,...headers}});
+const adminKey=(()=>{try{return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")||"{}").default||Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||""}catch{return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||""}})();
 
 Deno.serve(async req=>{
   if(req.method==="OPTIONS")return response(null,204);
   const token=req.headers.get("Authorization")||"",userClient=createClient(Deno.env.get("SUPABASE_URL")||"",Deno.env.get("SUPABASE_ANON_KEY")||"",{global:{headers:{Authorization:token}}});
   const {data:{user}}=await userClient.auth.getUser();
   if(!user)return response(JSON.stringify({error:"AUTH_REQUIRED"}),401,{"Content-Type":"application/json"});
-  const admin=createClient(Deno.env.get("SUPABASE_URL")||"",Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"");
+  if(!adminKey)return response(JSON.stringify({error:"SERVER_KEY_MISSING"}),500,{"Content-Type":"application/json"});
+  const admin=createClient(Deno.env.get("SUPABASE_URL")||"",adminKey);
 
   const url=new URL(req.url),action=url.searchParams.get("action");
   if(action==="download"){
