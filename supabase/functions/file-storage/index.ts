@@ -23,7 +23,8 @@ Deno.serve(async req=>{
 
   const form=await req.formData(),entityType=String(form.get("entityType")||""),entityId=String(form.get("entityId")||""),file=form.get("file");
   if(!(entityType in allowed)||!entityId||!(file instanceof File)||file.size>8_000_000||(!file.type.startsWith("image/")&&file.type!=="application/pdf"))return response(JSON.stringify({error:"INVALID_FILE"}),400,{"Content-Type":"application/json"});
-  const {data:parent}=await admin.from(allowed[entityType as keyof typeof allowed]).select("id,deleted_at").eq("id",entityId).maybeSingle();
+  const {data:parent,error:parentError}=await admin.from(allowed[entityType as keyof typeof allowed]).select("id,deleted_at").eq("id",entityId).maybeSingle();
+  if(parentError)return response(JSON.stringify({error:"PARENT_LOOKUP_FAILED",detail:parentError.message}),500,{"Content-Type":"application/json"});
   if(!parent||parent.deleted_at)return response(JSON.stringify({error:"PARENT_NOT_FOUND"}),404,{"Content-Type":"application/json"});
   const source=String(form.get("source")||"upload");if(source!=="upload"&&source!=="generated_pdf")return response(JSON.stringify({error:"INVALID_SOURCE"}),400,{"Content-Type":"application/json"});
   const version=source==="generated_pdf"?(await admin.from("file_attachments").select("id",{count:"exact",head:true}).eq("entity_type",entityType).eq("entity_id",entityId).eq("source",source)).count!+1:null;
