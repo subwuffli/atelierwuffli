@@ -34,7 +34,7 @@ grant select on public.file_attachments to authenticated;
 -- Die Edge Function verwendet service_role; nur die fuer Upload und Download
 -- benoetigten Tabellenrechte werden explizit vergeben.
 grant select on public.orders, public.invoices, public.receipts, public.expenses to service_role;
-grant select,insert on public.file_attachments to service_role;
+grant select,insert,update on public.file_attachments to service_role;
 
 create or replace function public.sync_attachment_trash_v1()
 returns trigger language plpgsql security definer set search_path=public as $$
