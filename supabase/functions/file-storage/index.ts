@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "npm:@aws-sdk/client-s3@3.823.0";
+import { CopyObjectCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "npm:@aws-sdk/client-s3@3.823.0";
 
 const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, apikey, content-type, x-client-info, x-supabase-api-version","Access-Control-Allow-Methods":"GET, POST, OPTIONS"};
 const allowed={order:"orders",invoice:"invoices",receipt:"receipts",expense:"expenses"} as const;
@@ -48,5 +48,6 @@ Deno.serve(async req=>{
   await r2.send(new PutObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:key,Body:new Uint8Array(await file.arrayBuffer()),ContentType:file.type}));
   const {data:saved,error}=await admin.from("file_attachments").insert({entity_type:entityType,entity_id:entityId,file_name:file.name,content_type:file.type,byte_size:file.size,storage_key:key,source,version,document_hash:documentHash,created_by:user.id}).select("id,file_name,created_at,version").single();
   if(error)throw error;
+  if(source==="generated_pdf"){const {data:older,error:olderError}=await admin.from("file_attachments").select("id,file_name,storage_key").eq("entity_type",entityType).eq("entity_id",entityId).eq("source",source).neq("id",saved.id).is("deleted_at",null);if(olderError)throw olderError;for(const old of older||[]){if(old.storage_key.includes("/Backup/"))continue;const backupKey=`${old.storage_key.slice(0,old.storage_key.lastIndexOf("/")+1)}Backup/${clean(old.file_name)}`;await r2.send(new CopyObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:backupKey,CopySource:`${Deno.env.get("R2_BUCKET")}/${old.storage_key}`}));const {error:moveError}=await admin.from("file_attachments").update({storage_key:backupKey}).eq("id",old.id);if(moveError)throw moveError;await r2.send(new DeleteObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:old.storage_key}))}}
   return response(JSON.stringify(saved),201,{"Content-Type":"application/json"});
 });
