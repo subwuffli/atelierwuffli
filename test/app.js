@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.70.0';
+const APP_VERSION='TEST V0.0.71.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
@@ -176,26 +176,30 @@ function customerGreeting(document){
   if(salutation==='sie'||salutation==='frau')return `Liebe ${name},`;
   return `Guten Tag ${name},`
 }
-async function storeGeneratedPdf(type,record,doc){
-  const data=new FormData();data.append('entityType',type);data.append('entityId',record.id);data.append('source','generated_pdf');data.append('file',new File([doc.output('blob')],`${record.number}.pdf`,{type:'application/pdf'}));
-  const {error}=await supabaseClient.functions.invoke('file-storage',{body:data});if(error)throw error;
+const pdfHash=async(type,record)=>{const payload={type,number:record.number,date:record.date,dueDate:record.dueDate||'',orderNumber:record.orderNumber||'',invoiceNumber:record.invoiceNumber||'',fulfilment:record.fulfilment||'',fulfilmentDate:record.fulfilmentDate||'',total:record.total,text:record.text||'',paymentMethod:record.paymentMethod||'',customer:record.customerSnapshot||{},items:record.items||[],settings:{firstName:state.settings.firstName||'',companyName:state.settings.companyName||'',street:state.settings.street||'',postalCity:state.settings.postalCity||'',bankName:state.settings.bankName||'',bankAddress:state.settings.bankAddress||'',iban:state.settings.iban||'',logo:state.settings.logo||''}},bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(payload))));return [...bytes].map(value=>value.toString(16).padStart(2,'0')).join('')};
+async function findGeneratedPdf(type,id,documentHash){const {data,error}=await supabaseClient.from('file_attachments').select('id,file_name').eq('entity_type',type).eq('entity_id',id).eq('source','generated_pdf').eq('document_hash',documentHash).is('deleted_at',null).maybeSingle();if(error)throw error;return data}
+async function openStoredPdf(file){const {data:{session}}=await supabaseClient.auth.getSession();if(!session)throw new Error('Sitzung abgelaufen. Bitte neu anmelden.');const response=await fetch(`${SUPABASE_URL}/functions/v1/file-storage?action=download&fileId=${encodeURIComponent(file.id)}`,{headers:{Authorization:`Bearer ${session.access_token}`,apikey:SUPABASE_KEY}});if(!response.ok)throw new Error('Gespeichertes PDF konnte nicht geöffnet werden.');await deliverPdfBlob(await response.blob(),file.file_name)}
+async function storeGeneratedPdf(type,record,doc,documentHash){
+  const data=new FormData();data.append('entityType',type);data.append('entityId',record.id);data.append('source','generated_pdf');data.append('documentHash',documentHash);data.append('file',new File([doc.output('blob')],`${record.number}.pdf`,{type:'application/pdf'}));
+  const {data:saved,error}=await supabaseClient.functions.invoke('file-storage',{body:data});if(error)throw error;return saved;
 }
 async function uploadAttachment(type,id,file){
   const data=new FormData();data.append('entityType',type);data.append('entityId',id);data.append('source','upload');data.append('file',file);
   const {error}=await supabaseClient.functions.invoke('file-storage',{body:data});if(error){const detail=await error.context?.json?.().catch(()=>null);throw new Error(detail?.detail||detail?.error||detail?.message||error.message)}
 }
-async function deliverPdf(doc,fileName){
-  const blob=doc.output('blob'),file=new File([blob],fileName,{type:'application/pdf'}),mobile=window.matchMedia?.('(max-width:900px)').matches||window.matchMedia?.('(pointer: coarse)').matches||window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;
+async function deliverPdfBlob(blob,fileName){
+  const file=new File([blob],fileName,{type:'application/pdf'}),mobile=window.matchMedia?.('(max-width:900px)').matches||window.matchMedia?.('(pointer: coarse)').matches||window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;
   if(mobile){
     const blobUrl=URL.createObjectURL(blob),canShare=Boolean(navigator.share&&navigator.canShare?.({files:[file]})),overlay=document.createElement('div');overlay.className='pdf-preview-view';overlay.innerHTML=`<div class="pdf-preview-controls"><button type="button" class="secondary" data-pdf-close>Schliessen</button><strong>${esc(fileName)}</strong><button type="button" class="primary" data-pdf-action>${canShare?'PDF teilen':'PDF herunterladen'}</button></div><iframe title="PDF-Vorschau ${esc(fileName)}" src="${blobUrl}"></iframe>`;
     document.body.appendChild(overlay);
     const close=()=>{overlay.remove();URL.revokeObjectURL(blobUrl)};
     overlay.querySelector('[data-pdf-close]').onclick=close;
-    overlay.querySelector('[data-pdf-action]').onclick=async()=>{if(!canShare){doc.save(fileName);return}try{await navigator.share({files:[file],title:fileName})}catch(error){if(error?.name!=='AbortError'){console.warn('PDF konnte nicht direkt geteilt werden:',error);doc.save(fileName)}}};
+    overlay.querySelector('[data-pdf-action]').onclick=async()=>{if(!canShare){const link=document.createElement('a');link.href=blobUrl;link.download=fileName;link.click();return}try{await navigator.share({files:[file],title:fileName})}catch(error){if(error?.name!=='AbortError'){console.warn('PDF konnte nicht direkt geteilt werden:',error);const link=document.createElement('a');link.href=blobUrl;link.download=fileName;link.click()}}};
     return
   }
-  const blobUrl=URL.createObjectURL(blob),opened=window.open(blobUrl,'_blank');if(!opened)doc.save(fileName);setTimeout(()=>URL.revokeObjectURL(blobUrl),60000)
+  const blobUrl=URL.createObjectURL(blob),opened=window.open(blobUrl,'_blank');if(!opened){const link=document.createElement('a');link.href=blobUrl;link.download=fileName;link.click()}setTimeout(()=>URL.revokeObjectURL(blobUrl),60000)
 }
+const deliverPdf=(doc,fileName)=>deliverPdfBlob(doc.output('blob'),fileName);
 function activeCustomers(){return state.customers.filter(c=>!c.archived)}
 async function nextNumber(prefix,d=today()){const {data,error}=await supabaseClient.rpc('next_document_number',{p_prefix:prefix,p_date:d});if(error)throw error;return data}
 async function nextCustomerNumber(){const {data,error}=await supabaseClient.rpc('next_customer_number');if(error)throw error;return data}
@@ -818,6 +822,7 @@ async function preparePdfLogo(source){
 
 async function pdfDocument(type,id){
   const invoice=state.invoices.find(x=>x.id===id),d=type==='order'?state.orders.find(x=>x.id===id):type==='receipt'?invoice?.receipt:invoice;if(!d)return;
+  const documentHash=await pdfHash(type,d),existingPdf=await findGeneratedPdf(type,d.id,documentHash);if(existingPdf){await openStoredPdf(existingPdf);return}
   if(!window.jspdf?.jsPDF){alert('Die PDF-Funktion konnte nicht geladen werden. Bitte Internetverbindung prüfen und die Seite neu laden.');return}
   const {jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4'}),s=state.settings,isInv=type==='invoice',isReceipt=type==='receipt';
   const pdfText=doc.text.bind(doc);doc.text=(text,...args)=>pdfText(text==='Liebe Kundin, lieber Kunde,'?customerGreeting(d):text,...args);
@@ -839,7 +844,7 @@ async function pdfDocument(type,id){
     else if(isInv){doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Rechnungsinformationen',20,225);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);[...companyLines,`Zahlbar bis ${date(d.dueDate)}`,`Referenz: ${d.number}`].forEach((line,index)=>doc.text(line,20,233+index*4.5));if(bankLines.length){doc.setTextColor(...ink);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Bankinformationen',112,225);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);bankLines.forEach((line,index)=>doc.text(line,112,233+index*4.5))}}
     else{doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Auftragsinformationen',20,225);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);const info=[...companyLines,`${d.fulfilment||'Erfüllung'} am ${date(d.fulfilmentDate)}`];if(d.text)info.push(...doc.splitTextToSize(String(d.text),75));info.forEach((line,index)=>doc.text(line,20,233+index*4.5))}
     doc.setTextColor(...ink);doc.setFont('times','italic');doc.setFontSize(isReceipt?24:20);doc.text('Vielen Dank!',105,270,{align:'center'});
-    await storeGeneratedPdf(type,d,doc);await deliverPdf(doc,`${d.number}.pdf`);return;
+    const saved=await storeGeneratedPdf(type,d,doc,documentHash);if(saved?.existing)await openStoredPdf(saved);else await deliverPdf(doc,`${d.number}.pdf`);return;
   }
   let y=18;
   if(s.logo){try{const logoData=s.logo.startsWith('data:')?s.logo:await fetch(s.logo).then(r=>r.blob()).then(blob=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(blob)}));doc.addImage(logoData,undefined,15,y,34,34,'logo','FAST')}catch(error){console.warn('Logo konnte nicht ins PDF eingefügt werden:',error)}}
@@ -852,7 +857,7 @@ async function pdfDocument(type,id){
   y+=5;doc.setFontSize(13);doc.text(`Gesamtbetrag: ${money(d.total)}`,193,y,{align:'right'});y+=12;doc.setFontSize(10);
   if(d.text){doc.text(doc.splitTextToSize(String(d.text),175),15,y);y+=15}
   if(isReceipt){doc.setFontSize(12);doc.text('Der Rechnungsbetrag wurde vollständig bezahlt.',15,y);doc.setFontSize(10);doc.text(`Rechnung: ${d.invoiceNumber}`,15,y+8)}else if(isInv){doc.text(`Zahlbar bis ${date(d.dueDate)}`,15,y);doc.text(`IBAN: ${s.iban||''}`,15,y+6);doc.text(`Referenz: ${d.number}`,15,y+12)}
-  await storeGeneratedPdf(type,d,doc);await deliverPdf(doc,`${d.number}.pdf`);
+  const saved=await storeGeneratedPdf(type,d,doc,documentHash);if(saved?.existing)await openStoredPdf(saved);else await deliverPdf(doc,`${d.number}.pdf`);
 }
 printDocument=async function(type,id){
   const invoice=state.invoices.find(x=>x.id===id),d=type==='order'?state.orders.find(x=>x.id===id):type==='receipt'?invoice?.receipt:invoice;if(!d)return;

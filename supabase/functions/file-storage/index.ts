@@ -40,11 +40,13 @@ Deno.serve(async req=>{
   const {data:parent,error:parentError}=await admin.from(allowed[entityType as keyof typeof allowed]).select("id,deleted_at").eq("id",entityId).maybeSingle();
   if(parentError)return response(JSON.stringify({error:"PARENT_LOOKUP_FAILED",detail:parentError.message}),500,{"Content-Type":"application/json"});
   if(!parent||parent.deleted_at)return response(JSON.stringify({error:"PARENT_NOT_FOUND"}),404,{"Content-Type":"application/json"});
-  const source=String(form.get("source")||"upload");if(source!=="upload"&&source!=="generated_pdf")return response(JSON.stringify({error:"INVALID_SOURCE"}),400,{"Content-Type":"application/json"});
+  const source=String(form.get("source")||"upload"),documentHash=source==="generated_pdf"?String(form.get("documentHash")||""):null;if(source!=="upload"&&source!=="generated_pdf")return response(JSON.stringify({error:"INVALID_SOURCE"}),400,{"Content-Type":"application/json"});
+  if(source==="generated_pdf"&&!/^[a-f0-9]{64}$/.test(documentHash||""))return response(JSON.stringify({error:"INVALID_DOCUMENT_HASH"}),400,{"Content-Type":"application/json"});
+  if(documentHash){const {data:existing}=await admin.from("file_attachments").select("id,file_name,created_at,version").eq("entity_type",entityType).eq("entity_id",entityId).eq("source",source).eq("document_hash",documentHash).is("deleted_at",null).maybeSingle();if(existing)return response(JSON.stringify({...existing,existing:true}),200,{"Content-Type":"application/json"})}
   const version=source==="generated_pdf"?(await admin.from("file_attachments").select("id",{count:"exact",head:true}).eq("entity_type",entityType).eq("entity_id",entityId).eq("source",source)).count!+1:null;
   const names=await storageNames(entityType as keyof typeof allowed,entityId,admin),safe=clean(file.name),parts=names.number.split('-'),year=`20${parts[1]||'00'}`,month=parts[2]||'00',key=`test/${names.root}/${year}/${month}/${names.folder}/${names.number}-${crypto.randomUUID()}-${safe}`;
   await r2.send(new PutObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:key,Body:new Uint8Array(await file.arrayBuffer()),ContentType:file.type}));
-  const {data:saved,error}=await admin.from("file_attachments").insert({entity_type:entityType,entity_id:entityId,file_name:file.name,content_type:file.type,byte_size:file.size,storage_key:key,source,version,created_by:user.id}).select("id,file_name,created_at,version").single();
+  const {data:saved,error}=await admin.from("file_attachments").insert({entity_type:entityType,entity_id:entityId,file_name:file.name,content_type:file.type,byte_size:file.size,storage_key:key,source,version,document_hash:documentHash,created_by:user.id}).select("id,file_name,created_at,version").single();
   if(error)throw error;
   return response(JSON.stringify(saved),201,{"Content-Type":"application/json"});
 });
