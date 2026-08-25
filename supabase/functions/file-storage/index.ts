@@ -32,7 +32,7 @@ Deno.serve(async req=>{
     const id=url.searchParams.get("fileId")||"",{data:file}=await admin.from("file_attachments").select("file_name,content_type,storage_key").eq("id",id).is("deleted_at",null).maybeSingle();
     if(!file)return response(JSON.stringify({error:"NOT_FOUND"}),404,{"Content-Type":"application/json"});
     const object=await r2.send(new GetObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:file.storage_key}));
-    return response(await object.Body?.transformToByteArray()||new Uint8Array(),200,{"Content-Type":file.content_type,"Content-Disposition":`inline; filename*=UTF-8''${encodeURIComponent(file.file_name)}`});
+    return response(object.Body?.transformToWebStream()||null,200,{"Content-Type":file.content_type,"Content-Disposition":`inline; filename*=UTF-8''${encodeURIComponent(file.file_name)}`});
   }
 
   const form=await req.formData(),entityType=String(form.get("entityType")||""),entityId=String(form.get("entityId")||""),file=form.get("file");
