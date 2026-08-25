@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.71.0';
+const APP_VERSION='TEST V0.0.72.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
@@ -822,7 +822,7 @@ async function preparePdfLogo(source){
 
 async function pdfDocument(type,id){
   const invoice=state.invoices.find(x=>x.id===id),d=type==='order'?state.orders.find(x=>x.id===id):type==='receipt'?invoice?.receipt:invoice;if(!d)return;
-  const documentHash=await pdfHash(type,d),existingPdf=await findGeneratedPdf(type,d.id,documentHash);if(existingPdf){await openStoredPdf(existingPdf);return}
+  const documentHash=await pdfHash(type,d),existingPdf=await findGeneratedPdf(type,d.id,documentHash);if(existingPdf){try{await openStoredPdf(existingPdf);return}catch(error){console.warn('Gespeichertes PDF fehlt, es wird neu erzeugt.',error)}}
   if(!window.jspdf?.jsPDF){alert('Die PDF-Funktion konnte nicht geladen werden. Bitte Internetverbindung prüfen und die Seite neu laden.');return}
   const {jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4'}),s=state.settings,isInv=type==='invoice',isReceipt=type==='receipt';
   const pdfText=doc.text.bind(doc);doc.text=(text,...args)=>pdfText(text==='Liebe Kundin, lieber Kunde,'?customerGreeting(d):text,...args);
