@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.72.0';
+const APP_VERSION='TEST V0.0.73.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
@@ -157,6 +157,7 @@ function openGlobalSearch(){modal('Globale Suche','<label class="search-field">S
 function openQuickActions(){modal('Schnell erfassen','<div class="sheet-actions"><button type="button" class="primary" data-create="customer">Neuen Kunden erfassen</button><button type="button" class="secondary" data-create="order">Neuen Auftrag erfassen</button><button type="button" class="secondary" data-create="expense">Neue Ausgabe erfassen</button></div>');$('#modal-body').onclick=e=>{const action=e.target.closest('[data-create]')?.dataset.create;if(!action)return;closeModal();if(action==='customer')customerForm();else if(action==='order')orderForm();else expenseForm()}}
 function openMoreMenu(){const destinations=[['customers','Kunden'],['orders','Aufträge'],['invoices','Rechnungen'],['receipts','Quittungen'],['expenses','Ausgaben'],['income','Einnahmen'],['settings','Einstellungen'],['trash','Papierkorb']];modal('Mehr',`<div class="more-grid">${destinations.map(([view,label])=>`<button type="button" class="secondary" data-more-view="${view}">${label}</button>`).join('')}</div>`);$('#modal-body').onclick=e=>{const view=e.target.closest('[data-more-view]')?.dataset.moreView;if(view){closeModal();render(view)}}}
 function notice(msg){const n=$('#notice');n.textContent=msg;n.classList.remove('hidden');setTimeout(()=>n.classList.add('hidden'),3500)}
+function showWorking(text){const overlay=document.createElement('div');overlay.className='working-overlay';overlay.innerHTML=`<span></span>${esc(text)}`;document.body.appendChild(overlay);return()=>overlay.remove()}
 function undoNotice(msg,onUndo){const n=$('#notice');n.innerHTML=`<span>${esc(msg)}</span> <button type="button" class="secondary" id="undo-action">Rückgängig</button>`;n.classList.remove('hidden');const button=$('#undo-action'),timer=setTimeout(()=>n.classList.add('hidden'),8000);button.onclick=async()=>{button.disabled=true;clearTimeout(timer);try{await onUndo();notice('Löschung rückgängig gemacht.')}catch(error){alert(`Wiederherstellung fehlgeschlagen: ${error.message}`)}}}
 function setTitle(t){$('#page-title').textContent=t}
 function modal(title,html){$('#modal-title').textContent=title;$('#modal-body').innerHTML=html;$('#modal-body').scrollTop=0;$('#modal').showModal()}
@@ -822,6 +823,7 @@ async function preparePdfLogo(source){
 
 async function pdfDocument(type,id){
   const invoice=state.invoices.find(x=>x.id===id),d=type==='order'?state.orders.find(x=>x.id===id):type==='receipt'?invoice?.receipt:invoice;if(!d)return;
+  const done=showWorking('PDF wird erstellt und gespeichert …');try{
   const documentHash=await pdfHash(type,d),existingPdf=await findGeneratedPdf(type,d.id,documentHash);if(existingPdf){try{await openStoredPdf(existingPdf);return}catch(error){console.warn('Gespeichertes PDF fehlt, es wird neu erzeugt.',error)}}
   if(!window.jspdf?.jsPDF){alert('Die PDF-Funktion konnte nicht geladen werden. Bitte Internetverbindung prüfen und die Seite neu laden.');return}
   const {jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4'}),s=state.settings,isInv=type==='invoice',isReceipt=type==='receipt';
@@ -858,6 +860,7 @@ async function pdfDocument(type,id){
   if(d.text){doc.text(doc.splitTextToSize(String(d.text),175),15,y);y+=15}
   if(isReceipt){doc.setFontSize(12);doc.text('Der Rechnungsbetrag wurde vollständig bezahlt.',15,y);doc.setFontSize(10);doc.text(`Rechnung: ${d.invoiceNumber}`,15,y+8)}else if(isInv){doc.text(`Zahlbar bis ${date(d.dueDate)}`,15,y);doc.text(`IBAN: ${s.iban||''}`,15,y+6);doc.text(`Referenz: ${d.number}`,15,y+12)}
   const saved=await storeGeneratedPdf(type,d,doc,documentHash);if(saved?.existing)await openStoredPdf(saved);else await deliverPdf(doc,`${d.number}.pdf`);
+  }finally{done()}
 }
 printDocument=async function(type,id){
   const invoice=state.invoices.find(x=>x.id===id),d=type==='order'?state.orders.find(x=>x.id===id):type==='receipt'?invoice?.receipt:invoice;if(!d)return;

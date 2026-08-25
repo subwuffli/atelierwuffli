@@ -20,6 +20,7 @@
 .standalone-app button[onclick^="printDocument"]{display:none!important}
 /* Einheitliche Bediengrössen und robuste Formularbreiten */
 button{min-height:42px}
+.working-overlay{position:fixed;z-index:1000;inset:0;display:flex;align-items:center;justify-content:center;gap:12px;background:rgba(40,34,31,.38);color:#fff;font-weight:750;font-size:1.05rem}.working-overlay span{width:26px;height:26px;border:3px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:working-spin .8s linear infinite}@keyframes working-spin{to{transform:rotate(360deg)}}
 .primary,.secondary,.danger,.text-button{display:inline-flex;align-items:center;justify-content:center;line-height:1.2}
 input,select,textarea{min-width:0;min-height:42px}
 .form-grid>*{min-width:0}
