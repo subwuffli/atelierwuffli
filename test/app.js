@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.73.0';
+const APP_VERSION='TEST V0.0.74.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
@@ -13,7 +13,7 @@ const defaultListColumns=()=>Object.fromEntries(Object.entries(LIST_COLUMN_OPTIO
 let listColumns=defaultListColumns();
 const EDIT_SESSION_TOKEN=crypto.randomUUID();
 const DEVICE_ID=localStorage.getItem('atelier-wuffli-device-id')||crypto.randomUUID();localStorage.setItem('atelier-wuffli-device-id',DEVICE_ID);
-const blankState=()=>({version:2,revision:0,settings:{firstName:'',companyName:'',street:'',postalCity:'',bankName:'',bankAddress:'',iban:'',mwstNumber:'',paymentDays:30,logo:'',orderText:'',invoiceText:'',positionTemplates:[]},customers:[],orders:[],invoices:[],expenses:[],lastExport:null});
+const blankState=()=>({version:2,revision:0,settings:{firstName:'',companyName:'',street:'',postalCity:'',bankName:'',bankAddress:'',iban:'',qrBuildingNumber:'',mwstNumber:'',paymentDays:30,logo:'',orderText:'',invoiceText:'',positionTemplates:[]},customers:[],orders:[],invoices:[],expenses:[],lastExport:null});
 const uid=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`;
 const today=()=>new Date().toISOString().slice(0,10);
 const dueDateFromFulfilment=d=>{const due=new Date(`${d||today()}T12:00:00`);due.setDate(due.getDate()+Number(state?.settings?.paymentDays??30));return due.toISOString().slice(0,10)};
@@ -177,7 +177,14 @@ function customerGreeting(document){
   if(salutation==='sie'||salutation==='frau')return `Liebe ${name},`;
   return `Guten Tag ${name},`
 }
-const pdfHash=async(type,record)=>{const payload={type,number:record.number,date:record.date,dueDate:record.dueDate||'',orderNumber:record.orderNumber||'',invoiceNumber:record.invoiceNumber||'',fulfilment:record.fulfilment||'',fulfilmentDate:record.fulfilmentDate||'',total:record.total,text:record.text||'',paymentMethod:record.paymentMethod||'',customer:record.customerSnapshot||{},items:record.items||[],settings:{firstName:state.settings.firstName||'',companyName:state.settings.companyName||'',street:state.settings.street||'',postalCity:state.settings.postalCity||'',bankName:state.settings.bankName||'',bankAddress:state.settings.bankAddress||'',iban:state.settings.iban||'',logo:state.settings.logo||''}},bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(payload))));return [...bytes].map(value=>value.toString(16).padStart(2,'0')).join('')};
+const pdfHash=async(type,record)=>{const payload={type,number:record.number,date:record.date,dueDate:record.dueDate||'',orderNumber:record.orderNumber||'',invoiceNumber:record.invoiceNumber||'',fulfilment:record.fulfilment||'',fulfilmentDate:record.fulfilmentDate||'',total:record.total,text:record.text||'',paymentMethod:record.paymentMethod||'',qrData:record.qrData||{},customer:record.customerSnapshot||{},items:record.items||[],settings:{firstName:state.settings.firstName||'',companyName:state.settings.companyName||'',street:state.settings.street||'',postalCity:state.settings.postalCity||'',bankName:state.settings.bankName||'',bankAddress:state.settings.bankAddress||'',iban:state.settings.iban||'',logo:state.settings.logo||''}},bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(payload))));return [...bytes].map(value=>value.toString(16).padStart(2,'0')).join('')};
+async function qrBillPng(invoice){
+  const QRBill=window.SwissQRBill?.svg?.SwissQRBill,qrData=invoice.qrData;
+  if(!QRBill||!qrData?.account||!qrData?.creditor)return null;
+  const svg=new QRBill({...qrData,amount:Number(invoice.total),currency:'CHF'},{language:'DE'}).toString(),blob=new Blob([svg],{type:'image/svg+xml'}),url=URL.createObjectURL(blob);
+  try{return await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>{const canvas=document.createElement('canvas'),scale=6;canvas.width=210*scale;canvas.height=105*scale;const context=canvas.getContext('2d');context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(image,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL('image/png'))};image.onerror=()=>reject(new Error('QR-Zahlteil konnte nicht gerendert werden.'));image.src=url})}finally{URL.revokeObjectURL(url)}
+}
+async function appendQrBill(doc,invoice){const png=await qrBillPng(invoice);if(!png)return;doc.addPage();doc.addImage(png,'PNG',0,192,210,105,undefined,'FAST')}
 async function findGeneratedPdf(type,id,documentHash){const {data,error}=await supabaseClient.from('file_attachments').select('id,file_name').eq('entity_type',type).eq('entity_id',id).eq('source','generated_pdf').eq('document_hash',documentHash).is('deleted_at',null).maybeSingle();if(error)throw error;return data}
 async function openStoredPdf(file){const {data:{session}}=await supabaseClient.auth.getSession();if(!session)throw new Error('Sitzung abgelaufen. Bitte neu anmelden.');const response=await fetch(`${SUPABASE_URL}/functions/v1/file-storage?action=download&fileId=${encodeURIComponent(file.id)}`,{headers:{Authorization:`Bearer ${session.access_token}`,apikey:SUPABASE_KEY}});if(!response.ok)throw new Error('Gespeichertes PDF konnte nicht geöffnet werden.');await deliverPdfBlob(await response.blob(),file.file_name)}
 async function storeGeneratedPdf(type,record,doc,documentHash){
@@ -763,6 +770,7 @@ renderCloudSettings=async function(){
   try{
     if(!(await acquireEditLock('settings',SETTINGS_LOCK_ID))){setTitle('Einstellungen');$('#content').innerHTML=`<div class="card empty">${esc(editLockConflictMessage('Die Einstellungen'))}</div>`;return}
     state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO;originalRenderCloudSettings();
+    const bankGrid=$('#settings-form .settings-block:nth-child(2) .form-grid');if(bankGrid)bankGrid.insertAdjacentHTML('beforeend',`<label>Hausnummer für QR-Rechnung<input name="qrBuildingNumber" value="${esc(state.settings.qrBuildingNumber||'')}"><span class="hint">Für QR-Rechnungen bitte Strasse und Hausnummer getrennt erfassen.</span></label><p class="hint span-2">Neue Rechnungen erhalten automatisch einen Schweizer QR-Zahlteil mit einer unveränderlichen Zahlungsreferenz. Ohne vollständige QR-Adresse wird keine QR-Rechnung erzeugt.</p>`);
     [...document.querySelectorAll('.backup-actions button')].find(button=>button.textContent.includes('importieren'))?.remove();
     $('#content').insertAdjacentHTML('beforeend','<div class="card settings-block"><h2>Positionsvorlagen</h2><p class="hint">Lege häufig verwendete Positionen mit Standardpreis fest. Beim Auftrag wird eine Kopie eingefügt und kann danach frei angepasst werden. Die Vorlagen gelten für alle Benutzer.</p><button type="button" class="secondary" onclick="openPositionTemplates()">Vorlagen bearbeiten</button></div>');
     $('#content').insertAdjacentHTML('beforeend','<div class="card settings-block"><h2>Meine Listenansicht</h2><p class="hint">Lege für Kunden, Aufträge, Rechnungen und Quittungen fest, welche Informationen in deiner Liste erscheinen und in welcher Reihenfolge. Diese Auswahl gilt nur für deinen Benutzer.</p><button type="button" class="secondary" onclick="openListSettings()">Listenansicht anpassen</button></div>');
@@ -846,7 +854,8 @@ async function pdfDocument(type,id){
     else if(isInv){doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Rechnungsinformationen',20,225);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);[...companyLines,`Zahlbar bis ${date(d.dueDate)}`,`Referenz: ${d.number}`].forEach((line,index)=>doc.text(line,20,233+index*4.5));if(bankLines.length){doc.setTextColor(...ink);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Bankinformationen',112,225);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);bankLines.forEach((line,index)=>doc.text(line,112,233+index*4.5))}}
     else{doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Auftragsinformationen',20,225);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);const info=[...companyLines,`${d.fulfilment||'Erfüllung'} am ${date(d.fulfilmentDate)}`];if(d.text)info.push(...doc.splitTextToSize(String(d.text),75));info.forEach((line,index)=>doc.text(line,20,233+index*4.5))}
     doc.setTextColor(...ink);doc.setFont('times','italic');doc.setFontSize(isReceipt?24:20);doc.text('Vielen Dank!',105,270,{align:'center'});
-    const saved=await storeGeneratedPdf(type,d,doc,documentHash);if(saved?.existing)await openStoredPdf(saved);else await deliverPdf(doc,`${d.number}.pdf`);return;
+    if(isInv)await appendQrBill(doc,d);
+    const saved=await storeGeneratedPdf(type,d,doc,documentHash);await openStoredPdf(saved);return;
   }
   let y=18;
   if(s.logo){try{const logoData=s.logo.startsWith('data:')?s.logo:await fetch(s.logo).then(r=>r.blob()).then(blob=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(blob)}));doc.addImage(logoData,undefined,15,y,34,34,'logo','FAST')}catch(error){console.warn('Logo konnte nicht ins PDF eingefügt werden:',error)}}
@@ -859,7 +868,8 @@ async function pdfDocument(type,id){
   y+=5;doc.setFontSize(13);doc.text(`Gesamtbetrag: ${money(d.total)}`,193,y,{align:'right'});y+=12;doc.setFontSize(10);
   if(d.text){doc.text(doc.splitTextToSize(String(d.text),175),15,y);y+=15}
   if(isReceipt){doc.setFontSize(12);doc.text('Der Rechnungsbetrag wurde vollständig bezahlt.',15,y);doc.setFontSize(10);doc.text(`Rechnung: ${d.invoiceNumber}`,15,y+8)}else if(isInv){doc.text(`Zahlbar bis ${date(d.dueDate)}`,15,y);doc.text(`IBAN: ${s.iban||''}`,15,y+6);doc.text(`Referenz: ${d.number}`,15,y+12)}
-  const saved=await storeGeneratedPdf(type,d,doc,documentHash);if(saved?.existing)await openStoredPdf(saved);else await deliverPdf(doc,`${d.number}.pdf`);
+  if(isInv)await appendQrBill(doc,d);
+  const saved=await storeGeneratedPdf(type,d,doc,documentHash);await openStoredPdf(saved);
   }finally{done()}
 }
 printDocument=async function(type,id){
