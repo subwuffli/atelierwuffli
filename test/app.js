@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.74.0';
+const APP_VERSION='TEST V0.0.75.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
@@ -770,7 +770,7 @@ renderCloudSettings=async function(){
   try{
     if(!(await acquireEditLock('settings',SETTINGS_LOCK_ID))){setTitle('Einstellungen');$('#content').innerHTML=`<div class="card empty">${esc(editLockConflictMessage('Die Einstellungen'))}</div>`;return}
     state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO;originalRenderCloudSettings();
-    const bankGrid=$('#settings-form .settings-block:nth-child(2) .form-grid');if(bankGrid)bankGrid.insertAdjacentHTML('beforeend',`<label>Hausnummer für QR-Rechnung<input name="qrBuildingNumber" value="${esc(state.settings.qrBuildingNumber||'')}"><span class="hint">Für QR-Rechnungen bitte Strasse und Hausnummer getrennt erfassen.</span></label><p class="hint span-2">Neue Rechnungen erhalten automatisch einen Schweizer QR-Zahlteil mit einer unveränderlichen Zahlungsreferenz. Ohne vollständige QR-Adresse wird keine QR-Rechnung erzeugt.</p>`);
+    const streetInput=$('#settings-form input[name="street"]'),streetLabel=streetInput?.closest('label');if(streetLabel){streetLabel.firstChild.nodeValue='Strasse (ohne Hausnummer)';streetLabel.insertAdjacentHTML('afterend',`<label>Hausnummer<input name="qrBuildingNumber" value="${esc(state.settings.qrBuildingNumber||'')}"><span class="hint">Für die QR-Rechnung separat erfassen.</span></label>`)}
     [...document.querySelectorAll('.backup-actions button')].find(button=>button.textContent.includes('importieren'))?.remove();
     $('#content').insertAdjacentHTML('beforeend','<div class="card settings-block"><h2>Positionsvorlagen</h2><p class="hint">Lege häufig verwendete Positionen mit Standardpreis fest. Beim Auftrag wird eine Kopie eingefügt und kann danach frei angepasst werden. Die Vorlagen gelten für alle Benutzer.</p><button type="button" class="secondary" onclick="openPositionTemplates()">Vorlagen bearbeiten</button></div>');
     $('#content').insertAdjacentHTML('beforeend','<div class="card settings-block"><h2>Meine Listenansicht</h2><p class="hint">Lege für Kunden, Aufträge, Rechnungen und Quittungen fest, welche Informationen in deiner Liste erscheinen und in welcher Reihenfolge. Diese Auswahl gilt nur für deinen Benutzer.</p><button type="button" class="secondary" onclick="openListSettings()">Listenansicht anpassen</button></div>');
