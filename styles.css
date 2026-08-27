@@ -17,6 +17,8 @@
 @media print{#app,#lock-screen,.print-controls{display:none!important}.mobile-print-view{display:block!important;position:static;padding:0;background:#fff}.print-sheet{display:block!important;width:auto;min-height:0;margin:0;padding:0}}
 @media (display-mode:standalone){button[onclick^="printDocument"]{display:none!important}}
 .standalone-app button[onclick^="printDocument"]{display:none!important}
+.working-overlay{position:fixed;z-index:1000;inset:0;display:flex;align-items:center;justify-content:center;gap:12px;background:rgba(40,34,31,.38);color:#fff;font-weight:750;font-size:1.05rem}.working-overlay span{width:26px;height:26px;border:3px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:working-spin .8s linear infinite}@keyframes working-spin{to{transform:rotate(360deg)}}
+@media(max-width:700px){#content[data-view="expenses"] td:nth-child(1)::before{content:"Ausgabennummer"}#content[data-view="expenses"] td:nth-child(2)::before{content:"Datum"}#content[data-view="expenses"] td:nth-child(3)::before{content:"Beschreibung"}#content[data-view="expenses"] td:nth-child(4)::before{content:"Betrag"}}
 /* Einheitliche Bediengrössen und robuste Formularbreiten */
 button{min-height:42px}
 .primary,.secondary,.danger,.text-button{display:inline-flex;align-items:center;justify-content:center;line-height:1.2}
