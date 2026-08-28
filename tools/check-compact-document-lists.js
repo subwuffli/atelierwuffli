@@ -7,4 +7,5 @@ assert.match(app,/document-more-actions/);
 assert.match(css,/\.stats\{grid-template-columns:repeat\(auto-fit,minmax\(190px,1fr\)\)\}/);
 assert.doesNotMatch(html,/SUPABASE CLOUD-DATENBANK/);
 assert.match(app,new RegExp(`APP_VERSION='${version}'`));
+assert.match(html,new RegExp(`(?:styles\\.css|app\\.js)\\?v=${version.replace('TEST V','')}`));
 console.log('Compact document lists and responsive dashboard checks passed.');
