@@ -5,5 +5,6 @@ assert(app.includes("tab('Auftrag','order'"),'Auftrag-Reiter fehlt');
 assert(app.includes("tab('Rechnung','invoice'"),'Rechnung-Reiter fehlt');
 assert(app.includes("tab('Quittung','receipt'"),'Quittung-Reiter fehlt');
 assert(app.includes('PDF öffnen'),'PDF-Aktion fehlt');
+assert(!app.includes('>Rechnung & Zahlung</button>'),'Überflüssige Rechnung-und-Zahlung-Aktion ist noch vorhanden');
 assert(css.includes('.document-detail-print{display:none!important}'),'Drucken bleibt auf Mobilgeräten sichtbar');
 console.log('Dokument-Reiter OK');
