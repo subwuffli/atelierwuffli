@@ -56,4 +56,6 @@ Die zugehörige Testmigration liegt unter `supabase/test-record-storage-v0037.sq
 
 `TEST V0.0.77.0` korrigiert die IBAN-Prüfung für Schweizer und Liechtensteiner IBANs. Gültige CH-/LI-IBANs werden nun korrekt als Grundlage für den QR-Zahlteil akzeptiert.
 
+`TEST V0.0.79.0` korrigiert die Übergabe der IBAN an die lokal eingebundene Swiss-QR-Bibliothek. Rechnungen mit normaler CH-/LI-IBAN können damit ihren QR-Zahlteil ohne Datenbankfehler erzeugen.
+
 `TEST V0.0.78.0` korrigiert die SCOR-Referenzberechnung für normale IBANs. Rechnungen mit normaler CH-/LI-IBAN können damit ihren QR-Zahlteil ohne Datenbankfehler erzeugen.

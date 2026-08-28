@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.78.0';
+const APP_VERSION='TEST V0.0.79.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
@@ -182,7 +182,7 @@ async function qrBillPng(invoice){
   const QRBill=window.SwissQRBill?.svg?.SwissQRBill,qrData=invoice.qrData;
   if(!QRBill)throw new Error('Das QR-Rechnungsmodul wurde nicht geladen. Bitte die Seite neu laden.');
   if(!qrData?.account||!qrData?.creditor)return null;
-  const svg=new QRBill({...qrData,amount:Number(invoice.total),currency:'CHF'},{language:'DE'}).toString(),blob=new Blob([svg],{type:'image/svg+xml'}),url=URL.createObjectURL(blob);
+  const svg=new QRBill({...qrData,creditor:{...qrData.creditor,account:qrData.account},amount:Number(invoice.total),currency:'CHF'},{language:'DE'}).toString(),blob=new Blob([svg],{type:'image/svg+xml'}),url=URL.createObjectURL(blob);
   try{return await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>{const canvas=document.createElement('canvas'),scale=6;canvas.width=210*scale;canvas.height=105*scale;const context=canvas.getContext('2d');context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(image,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL('image/png'))};image.onerror=()=>reject(new Error('QR-Zahlteil konnte nicht gerendert werden.'));image.src=url})}finally{URL.revokeObjectURL(url)}
 }
 async function appendQrBill(doc,invoice){const png=await qrBillPng(invoice);if(!png)return;doc.addPage();doc.addImage(png,'PNG',0,192,210,105,undefined,'FAST')}
