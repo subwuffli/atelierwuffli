@@ -1,4 +1,4 @@
--- TEST V0.0.74.0, ergänzt in V0.0.76.0: Schweizer QR-Rechnung. Erst in der Testumgebung ausführen.
+-- TEST V0.0.74.0, ergänzt in V0.0.77.0: Schweizer QR-Rechnung. Erst in der Testumgebung ausführen.
 -- QR-Zahlungsdaten werden beim Erstellen einer Rechnung unveränderlich gespeichert.
 
 alter table public.company_settings add column if not exists qr_building_number text not null default '';
@@ -29,15 +29,12 @@ end $$;
 
 create or replace function public.qr_iban_valid_v1(p_account text)
 returns boolean language plpgsql immutable strict set search_path=public as $$
-declare account text:=upper(regexp_replace(p_account,'[[:space:]]','','g')); value text; remainder integer:=0; i integer; ch text; digit integer;
+declare account text:=upper(regexp_replace(p_account,'[[:space:]]','','g')); value text; digits text:=''; remainder integer:=0; i integer; ch text;
 begin
   if account !~ '^(CH|LI)[0-9]{19}$' then return false; end if;
   value:=substr(account,5)||substr(account,1,4);
-  for i in 1..length(value) loop
-    ch:=substr(value,i,1);
-    digit:=case when ch between 'A' and 'Z' then ascii(ch)-55 else ch::integer end;
-    remainder:=(remainder*10+digit)%97;
-  end loop;
+  for i in 1..length(value) loop ch:=substr(value,i,1);digits:=digits||case when ch between 'A' and 'Z' then (ascii(ch)-55)::text else ch end; end loop;
+  for i in 1..length(digits) loop remainder:=(remainder*10+substr(digits,i,1)::integer)%97; end loop;
   return remainder=1;
 end $$;
 
