@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.82.0';
+const APP_VERSION='TEST V0.0.83.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
@@ -200,7 +200,7 @@ async function findGeneratedPdf(type,id,documentHash){const {data,error}=await s
 async function openStoredPdf(file){const {data:{session}}=await supabaseClient.auth.getSession();if(!session)throw new Error('Sitzung abgelaufen. Bitte neu anmelden.');const response=await fetch(`${SUPABASE_URL}/functions/v1/file-storage?action=download&fileId=${encodeURIComponent(file.id)}`,{headers:{Authorization:`Bearer ${session.access_token}`,apikey:SUPABASE_KEY}});if(!response.ok)throw new Error('Gespeichertes PDF konnte nicht geöffnet werden.');await deliverPdfBlob(await response.blob(),file.file_name)}
 async function storeGeneratedPdf(type,record,doc,documentHash){
   const data=new FormData();data.append('entityType',type);data.append('entityId',record.id);data.append('source','generated_pdf');data.append('documentHash',documentHash);data.append('file',new File([doc.output('blob')],`${record.number}.pdf`,{type:'application/pdf'}));
-  const {data:saved,error}=await supabaseClient.functions.invoke('file-storage',{body:data});if(error)throw error;return saved;
+  for(let attempt=0;attempt<3;attempt++){const {data:saved,error}=await supabaseClient.functions.invoke('file-storage',{body:data});if(!error)return saved;if(!/Failed to send a request to the Edge Function/i.test(error.message)||attempt===2)throw error;await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)))}
 }
 async function uploadAttachment(type,id,file){
   const data=new FormData();data.append('entityType',type);data.append('entityId',id);data.append('source','upload');data.append('file',file);
