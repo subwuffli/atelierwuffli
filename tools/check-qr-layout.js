@@ -1,0 +1,9 @@
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const source=fs.readFileSync('test/app.js','utf8'),match=source.match(/async function appendQrBill\(doc,invoice,onCurrentPage=false\)\{[^\n]+\}/);
+assert(match,'appendQrBill fehlt');
+assert(source.includes('let y=invoiceCompact?120:142'),'Rechnung ist nicht verdichtet');
+assert(source.includes('else if(!isInv){doc.setFont'), 'Rechnungsfuss wird nicht übersprungen');
+const qrBillPng=async()=> 'png';
+eval(`${match[0]}; globalThis.appendQrBill=appendQrBill`);
+const doc={pages:0,images:[],addPage(){this.pages++},addImage(...args){this.images.push(args)}};
+(async()=>{await appendQrBill(doc,{},true);assert.equal(doc.pages,0);assert.equal(doc.images[0][2],0);assert.equal(doc.images[0][3],192);await appendQrBill(doc,{},false);assert.equal(doc.pages,1);assert.equal(doc.images[1][3],0);console.log('QR layout OK')})().catch(error=>{console.error(error);process.exit(1)});
