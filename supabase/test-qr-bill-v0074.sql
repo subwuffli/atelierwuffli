@@ -1,4 +1,4 @@
--- TEST V0.0.74.0, ergänzt in V0.0.77.0: Schweizer QR-Rechnung. Erst in der Testumgebung ausführen.
+-- TEST V0.0.74.0, ergänzt in V0.0.78.0: Schweizer QR-Rechnung. Erst in der Testumgebung ausführen.
 -- QR-Zahlungsdaten werden beim Erstellen einer Rechnung unveränderlich gespeichert.
 
 alter table public.company_settings add column if not exists qr_building_number text not null default '';
@@ -13,7 +13,7 @@ begin
     ch:=substr(clean,i,1);
     digits:=digits||case when ch between 'A' and 'Z' then (ascii(ch)-55)::text else ch end;
   end loop;
-  digits:=digits||'RF00';
+  digits:=digits||'271500';
   for i in 1..length(digits) loop remainder:=(remainder*10+substr(digits,i,1)::integer)%97; end loop;
   return 'RF'||lpad((98-remainder)::text,2,'0')||clean;
 end $$;

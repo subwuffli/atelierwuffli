@@ -55,3 +55,5 @@ Die zugehörige Testmigration liegt unter `supabase/test-record-storage-v0037.sq
 `TEST V0.0.76.0` erzeugt für Rechnungen einen Schweizer QR-Zahlteil direkt im Browser. Bestehende Rechnungen mit noch leeren QR-Daten werden beim Speichern vollständiger Rechnungsinformationen nachgepflegt. Ohne Firma oder Name, Strasse, Hausnummer, PLZ/Ort und gültige CH- oder LI-IBAN wird kein unvollständiges Rechnungs-PDF gespeichert.
 
 `TEST V0.0.77.0` korrigiert die IBAN-Prüfung für Schweizer und Liechtensteiner IBANs. Gültige CH-/LI-IBANs werden nun korrekt als Grundlage für den QR-Zahlteil akzeptiert.
+
+`TEST V0.0.78.0` korrigiert die SCOR-Referenzberechnung für normale IBANs. Rechnungen mit normaler CH-/LI-IBAN können damit ihren QR-Zahlteil ohne Datenbankfehler erzeugen.
