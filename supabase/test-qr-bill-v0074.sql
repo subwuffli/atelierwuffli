@@ -1,4 +1,4 @@
--- TEST V0.0.74.0: Schweizer QR-Rechnung. Erst in der Testumgebung ausführen.
+-- TEST V0.0.74.0, ergänzt in V0.0.76.0: Schweizer QR-Rechnung. Erst in der Testumgebung ausführen.
 -- QR-Zahlungsdaten werden beim Erstellen einer Rechnung unveränderlich gespeichert.
 
 alter table public.company_settings add column if not exists qr_building_number text not null default '';
@@ -27,6 +27,20 @@ begin
   return digits||check_digit::text;
 end $$;
 
+create or replace function public.qr_iban_valid_v1(p_account text)
+returns boolean language plpgsql immutable strict set search_path=public as $$
+declare account text:=upper(regexp_replace(p_account,'[[:space:]]','','g')); value text; remainder integer:=0; i integer; ch text; digit integer;
+begin
+  if account !~ '^(CH|LI)[0-9]{19}$' then return false; end if;
+  value:=substr(account,5)||substr(account,1,4);
+  for i in 1..length(value) loop
+    ch:=substr(value,i,1);
+    digit:=case when ch between 'A' and 'Z' then ascii(ch)-55 else ch::integer end;
+    remainder:=(remainder*10+digit)%97;
+  end loop;
+  return remainder=1;
+end $$;
+
 create or replace function public.qr_bill_data_v1(p_number text)
 returns jsonb language plpgsql stable security invoker set search_path=public as $$
 declare s public.company_settings%rowtype; account text; name_value text; postal text[]; iid integer;
@@ -35,7 +49,7 @@ begin
   account:=upper(regexp_replace(coalesce(s.iban,''),'[[:space:]]','','g'));
   name_value:=coalesce(nullif(s.company_name,''),nullif(s.first_name,''),nullif(s.name,''));
   postal:=regexp_match(coalesce(s.postal_city,''),'^[[:space:]]*([^[:space:]]+)[[:space:]]+(.+?)[[:space:]]*$');
-  if account='' or name_value is null or nullif(s.street,'') is null or nullif(s.qr_building_number,'') is null or postal is null then return '{}'::jsonb; end if;
+  if not qr_iban_valid_v1(account) or name_value is null or nullif(s.street,'') is null or nullif(s.qr_building_number,'') is null or postal is null then return '{}'::jsonb; end if;
   iid:=nullif(substr(account,5,5),'')::integer;
   return jsonb_build_object('account',account,'creditor',jsonb_build_object('name',name_value,'address',s.street,'buildingNumber',s.qr_building_number,'zip',postal[1],'city',postal[2],'country','CH'),'reference',case when iid between 30000 and 31999 then qr_reference_v1(p_number) else qr_scor_reference_v1(p_number) end,'message','Rechnung '||p_number);
 end $$;
@@ -83,6 +97,7 @@ begin
   if auth.uid() is null then raise exception 'AUTH_REQUIRED'; end if;
   if not exists(select 1 from edit_locks where entity_type='settings' and entity_id=lock_id and user_id=auth.uid() and session_token=p_session_token and expires_at>now()) then raise exception 'EDIT_LOCK_LOST'; end if;
   update company_settings set name=coalesce(p_settings->>'name',''),address=coalesce(p_settings->>'address',''),iban=coalesce(p_settings->>'iban',''),first_name=coalesce(p_settings->>'firstName',''),company_name=coalesce(p_settings->>'companyName',''),street=coalesce(p_settings->>'street',''),postal_city=coalesce(p_settings->>'postalCity',''),bank_name=coalesce(p_settings->>'bankName',''),bank_address=coalesce(p_settings->>'bankAddress',''),qr_building_number=coalesce(p_settings->>'qrBuildingNumber',''),mwst_number=coalesce(p_settings->>'mwstNumber',''),payment_days=coalesce((p_settings->>'paymentDays')::integer,30),logo=coalesce(p_settings->>'logo',''),order_text=coalesce(p_settings->>'orderText',''),invoice_text=coalesce(p_settings->>'invoiceText',''),updated_at=clock_timestamp() where id='main' returning updated_at into saved_stamp;
+  update invoices set qr_data=qr_bill_data_v1(number),updated_at=clock_timestamp() where qr_data='{}'::jsonb and qr_bill_data_v1(number)<>'{}'::jsonb;
   revision_value:=erp_bump_revision_v1();
   return jsonb_build_object('revision',revision_value,'updatedAt',saved_stamp);
 end $$;
@@ -99,6 +114,6 @@ select jsonb_build_object(
 );
 $$;
 
-grant execute on function public.qr_scor_reference_v1(text),public.qr_reference_v1(text),public.qr_bill_data_v1(text),public.save_invoice_v1(jsonb,timestamptz,uuid),public.save_settings_v1(jsonb,uuid),public.export_erp_backup() to authenticated;
-revoke all on function public.qr_scor_reference_v1(text),public.qr_reference_v1(text),public.qr_bill_data_v1(text) from anon;
+grant execute on function public.qr_scor_reference_v1(text),public.qr_reference_v1(text),public.qr_iban_valid_v1(text),public.qr_bill_data_v1(text),public.save_invoice_v1(jsonb,timestamptz,uuid),public.save_settings_v1(jsonb,uuid),public.export_erp_backup() to authenticated;
+revoke all on function public.qr_scor_reference_v1(text),public.qr_reference_v1(text),public.qr_iban_valid_v1(text),public.qr_bill_data_v1(text) from anon;
 notify pgrst, 'reload schema';

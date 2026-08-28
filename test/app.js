@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.75.0';
+const APP_VERSION='TEST V0.0.76.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
@@ -180,11 +180,22 @@ function customerGreeting(document){
 const pdfHash=async(type,record)=>{const payload={type,number:record.number,date:record.date,dueDate:record.dueDate||'',orderNumber:record.orderNumber||'',invoiceNumber:record.invoiceNumber||'',fulfilment:record.fulfilment||'',fulfilmentDate:record.fulfilmentDate||'',total:record.total,text:record.text||'',paymentMethod:record.paymentMethod||'',qrData:record.qrData||{},customer:record.customerSnapshot||{},items:record.items||[],settings:{firstName:state.settings.firstName||'',companyName:state.settings.companyName||'',street:state.settings.street||'',postalCity:state.settings.postalCity||'',bankName:state.settings.bankName||'',bankAddress:state.settings.bankAddress||'',iban:state.settings.iban||'',logo:state.settings.logo||''}},bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(payload))));return [...bytes].map(value=>value.toString(16).padStart(2,'0')).join('')};
 async function qrBillPng(invoice){
   const QRBill=window.SwissQRBill?.svg?.SwissQRBill,qrData=invoice.qrData;
-  if(!QRBill||!qrData?.account||!qrData?.creditor)return null;
+  if(!QRBill)throw new Error('Das QR-Rechnungsmodul wurde nicht geladen. Bitte die Seite neu laden.');
+  if(!qrData?.account||!qrData?.creditor)return null;
   const svg=new QRBill({...qrData,amount:Number(invoice.total),currency:'CHF'},{language:'DE'}).toString(),blob=new Blob([svg],{type:'image/svg+xml'}),url=URL.createObjectURL(blob);
   try{return await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>{const canvas=document.createElement('canvas'),scale=6;canvas.width=210*scale;canvas.height=105*scale;const context=canvas.getContext('2d');context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(image,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL('image/png'))};image.onerror=()=>reject(new Error('QR-Zahlteil konnte nicht gerendert werden.'));image.src=url})}finally{URL.revokeObjectURL(url)}
 }
 async function appendQrBill(doc,invoice){const png=await qrBillPng(invoice);if(!png)return;doc.addPage();doc.addImage(png,'PNG',0,192,210,105,undefined,'FAST')}
+async function ensureInvoiceQrData(invoice){
+  if(invoice.qrData?.account&&invoice.qrData?.creditor)return invoice;
+  if(!(await acquireEditLock('invoice',invoice.id)))throw new Error(editLockConflictMessage('Diese Rechnung'));
+  try{
+    await saveInvoiceRecord(invoice,invoice.updatedAt,true);
+    const saved=state.invoices.find(entry=>entry.id===invoice.id);
+    if(!saved?.qrData?.account||!saved.qrData?.creditor)throw new Error('QR-Zahlteil konnte nicht erzeugt werden. Bitte unter Einstellungen Firma/Name, IBAN, Strasse, Hausnummer sowie PLZ/Ort speichern.');
+    return saved;
+  }finally{await releaseCurrentEditLock()}
+}
 async function findGeneratedPdf(type,id,documentHash){const {data,error}=await supabaseClient.from('file_attachments').select('id,file_name').eq('entity_type',type).eq('entity_id',id).eq('source','generated_pdf').eq('document_hash',documentHash).is('deleted_at',null).maybeSingle();if(error)throw error;return data}
 async function openStoredPdf(file){const {data:{session}}=await supabaseClient.auth.getSession();if(!session)throw new Error('Sitzung abgelaufen. Bitte neu anmelden.');const response=await fetch(`${SUPABASE_URL}/functions/v1/file-storage?action=download&fileId=${encodeURIComponent(file.id)}`,{headers:{Authorization:`Bearer ${session.access_token}`,apikey:SUPABASE_KEY}});if(!response.ok)throw new Error('Gespeichertes PDF konnte nicht geöffnet werden.');await deliverPdfBlob(await response.blob(),file.file_name)}
 async function storeGeneratedPdf(type,record,doc,documentHash){
@@ -830,8 +841,9 @@ async function preparePdfLogo(source){
 }
 
 async function pdfDocument(type,id){
-  const invoice=state.invoices.find(x=>x.id===id),d=type==='order'?state.orders.find(x=>x.id===id):type==='receipt'?invoice?.receipt:invoice;if(!d)return;
+  let invoice=state.invoices.find(x=>x.id===id),d=type==='order'?state.orders.find(x=>x.id===id):type==='receipt'?invoice?.receipt:invoice;if(!d)return;
   const done=showWorking('PDF wird erstellt und gespeichert …');try{
+  if(type==='invoice'){invoice=await ensureInvoiceQrData(invoice);d=invoice}
   const documentHash=await pdfHash(type,d),existingPdf=await findGeneratedPdf(type,d.id,documentHash);if(existingPdf){try{await openStoredPdf(existingPdf);return}catch(error){console.warn('Gespeichertes PDF fehlt, es wird neu erzeugt.',error)}}
   if(!window.jspdf?.jsPDF){alert('Die PDF-Funktion konnte nicht geladen werden. Bitte Internetverbindung prüfen und die Seite neu laden.');return}
   const {jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4'}),s=state.settings,isInv=type==='invoice',isReceipt=type==='receipt';
@@ -870,7 +882,7 @@ async function pdfDocument(type,id){
   if(isReceipt){doc.setFontSize(12);doc.text('Der Rechnungsbetrag wurde vollständig bezahlt.',15,y);doc.setFontSize(10);doc.text(`Rechnung: ${d.invoiceNumber}`,15,y+8)}else if(isInv){doc.text(`Zahlbar bis ${date(d.dueDate)}`,15,y);doc.text(`IBAN: ${s.iban||''}`,15,y+6);doc.text(`Referenz: ${d.number}`,15,y+12)}
   if(isInv)await appendQrBill(doc,d);
   const saved=await storeGeneratedPdf(type,d,doc,documentHash);await openStoredPdf(saved);
-  }finally{done()}
+  }catch(error){console.error('PDF konnte nicht erstellt werden:',error);alert(`PDF konnte nicht erstellt werden: ${error.message||'Unbekannter Fehler'}`)}finally{done()}
 }
 printDocument=async function(type,id){
   const invoice=state.invoices.find(x=>x.id===id),d=type==='order'?state.orders.find(x=>x.id===id):type==='receipt'?invoice?.receipt:invoice;if(!d)return;
