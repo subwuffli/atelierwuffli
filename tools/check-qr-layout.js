@@ -5,6 +5,7 @@ assert(source.includes('let y=invoiceCompact?120:142'),'Rechnung ist nicht verdi
 assert(source.includes('else if(!isInv){doc.setFont'), 'Rechnungsfuss wird nicht übersprungen');
 assert(source.includes("['Auftragsnummer:',d.orderNumber||'–']"),'Auftragsnummer fehlt im Rechnungs-PDF');
 assert(source.includes('for(let attempt=0;attempt<3;attempt++)'),'PDF-Upload wird nicht wiederholt');
+assert(source.includes("doc.text('Vielen Dank!',65,y-7,{align:'center'})"),'Vielen-Dank-Schriftzug fehlt');
 const qrBillPng=async()=> 'png';
 eval(`${match[0]}; globalThis.appendQrBill=appendQrBill`);
 const doc={pages:0,images:[],addPage(){this.pages++},addImage(...args){this.images.push(args)}};

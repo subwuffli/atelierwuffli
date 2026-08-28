@@ -56,6 +56,8 @@ Die zugehörige Testmigration liegt unter `supabase/test-record-storage-v0037.sq
 
 `TEST V0.0.77.0` korrigiert die IBAN-Prüfung für Schweizer und Liechtensteiner IBANs. Gültige CH-/LI-IBANs werden nun korrekt als Grundlage für den QR-Zahlteil akzeptiert.
 
+`TEST V0.0.84.0` ergänzt den Schriftzug «Vielen Dank!» links neben dem Gesamtbetrag der QR-Rechnung.
+
 `TEST V0.0.83.0` wiederholt den kurzfristig fehlgeschlagenen, prüfsummengeschützten PDF-Upload bis zu zweimal. Dadurch führen vorübergehende Verbindungsprobleme nicht mehr sofort zu einer Fehlermeldung oder zu doppelten PDFs.
 
 `TEST V0.0.82.0` ergänzt die Auftragsnummer unterhalb der Rechnungsnummer und verdichtet den Metadatenblock der Rechnung.
