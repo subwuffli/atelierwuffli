@@ -2,7 +2,8 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://johkbmlozygtfjsqfkdu.supabase.co';
 const SUPABASE_KEY='sb_publishable_DGpxSu1ppS0fY7nbE75RSg_rI7G8UAb';
-const APP_VERSION='V0.0.73.0';
+const APP_VERSION='V0.0.84.0';
+const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
 let state,currentView='dashboard',realtimeChannel=null,presenceChannel=null,presenceHeartbeat=null,versionHeartbeat=null,presenceUser=null,lastUserActivity=Date.now(),lastPresenceTrack=0,remoteRevision=0,isSaving=false,customerSort='number-asc',orderSort='number-desc',invoiceSort='number-desc',receiptSort='number-desc',financeMonth=new Date().toISOString().slice(0,7),activeEditLock=null,lockHeartbeat=null,preferencesUserId=null;
@@ -12,7 +13,7 @@ const defaultListColumns=()=>Object.fromEntries(Object.entries(LIST_COLUMN_OPTIO
 let listColumns=defaultListColumns();
 const EDIT_SESSION_TOKEN=crypto.randomUUID();
 const DEVICE_ID=localStorage.getItem('atelier-wuffli-device-id')||crypto.randomUUID();localStorage.setItem('atelier-wuffli-device-id',DEVICE_ID);
-const blankState=()=>({version:2,revision:0,settings:{firstName:'',companyName:'',street:'',postalCity:'',bankName:'',bankAddress:'',iban:'',mwstNumber:'',paymentDays:30,logo:'',orderText:'',invoiceText:'',positionTemplates:[]},customers:[],orders:[],invoices:[],expenses:[],lastExport:null});
+const blankState=()=>({version:2,revision:0,settings:{firstName:'',companyName:'',street:'',postalCity:'',bankName:'',bankAddress:'',iban:'',qrBuildingNumber:'',mwstNumber:'',paymentDays:30,logo:'',orderText:'',invoiceText:'',positionTemplates:[]},customers:[],orders:[],invoices:[],expenses:[],lastExport:null});
 const uid=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`;
 const today=()=>new Date().toISOString().slice(0,10);
 const dueDateFromFulfilment=d=>{const due=new Date(`${d||today()}T12:00:00`);due.setDate(due.getDate()+Number(state?.settings?.paymentDays??30));return due.toISOString().slice(0,10)};
@@ -176,10 +177,31 @@ function customerGreeting(document){
   if(salutation==='sie'||salutation==='frau')return `Liebe ${name},`;
   return `Guten Tag ${name},`
 }
-const pdfHash=async(type,record)=>{const payload={type,number:record.number,date:record.date,dueDate:record.dueDate||'',orderNumber:record.orderNumber||'',invoiceNumber:record.invoiceNumber||'',fulfilment:record.fulfilment||'',fulfilmentDate:record.fulfilmentDate||'',total:record.total,text:record.text||'',paymentMethod:record.paymentMethod||'',customer:record.customerSnapshot||{},items:record.items||[],settings:{firstName:state.settings.firstName||'',companyName:state.settings.companyName||'',street:state.settings.street||'',postalCity:state.settings.postalCity||'',bankName:state.settings.bankName||'',bankAddress:state.settings.bankAddress||'',iban:state.settings.iban||'',logo:state.settings.logo||''}},bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(payload))));return [...bytes].map(value=>value.toString(16).padStart(2,'0')).join('')};
+const pdfHash=async(type,record)=>{const payload={type,number:record.number,date:record.date,dueDate:record.dueDate||'',orderNumber:record.orderNumber||'',invoiceNumber:record.invoiceNumber||'',fulfilment:record.fulfilment||'',fulfilmentDate:record.fulfilmentDate||'',total:record.total,text:record.text||'',paymentMethod:record.paymentMethod||'',qrData:record.qrData||{},qrLayout:type==='invoice'?'single-page-v3':'',customer:record.customerSnapshot||{},items:record.items||[],settings:{firstName:state.settings.firstName||'',companyName:state.settings.companyName||'',street:state.settings.street||'',postalCity:state.settings.postalCity||'',bankName:state.settings.bankName||'',bankAddress:state.settings.bankAddress||'',iban:state.settings.iban||'',logo:state.settings.logo||''}},bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(payload))));return [...bytes].map(value=>value.toString(16).padStart(2,'0')).join('')};
+async function qrBillPng(invoice){
+  const QRBill=window.SwissQRBill?.svg?.SwissQRBill,qrData=invoice.qrData;
+  if(!QRBill)throw new Error('Das QR-Rechnungsmodul wurde nicht geladen. Bitte die Seite neu laden.');
+  if(!qrData?.account||!qrData?.creditor)return null;
+  const svg=new QRBill({...qrData,creditor:{...qrData.creditor,account:qrData.account},amount:Number(invoice.total),currency:'CHF'},{language:'DE'}).toString(),blob=new Blob([svg],{type:'image/svg+xml'}),url=URL.createObjectURL(blob);
+  try{return await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>{const canvas=document.createElement('canvas'),scale=6;canvas.width=210*scale;canvas.height=105*scale;const context=canvas.getContext('2d');context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(image,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL('image/png'))};image.onerror=()=>reject(new Error('QR-Zahlteil konnte nicht gerendert werden.'));image.src=url})}finally{URL.revokeObjectURL(url)}
+}
+async function appendQrBill(doc,invoice,onCurrentPage=false){const png=await qrBillPng(invoice);if(!png)return;if(!onCurrentPage)doc.addPage();doc.addImage(png,'PNG',0,onCurrentPage?192:0,210,105,undefined,'FAST')}
+async function ensureInvoiceQrData(invoice){
+  if(invoice.qrData?.account&&invoice.qrData?.creditor)return invoice;
+  if(!(await acquireEditLock('invoice',invoice.id)))throw new Error(editLockConflictMessage('Diese Rechnung'));
+  try{
+    await saveInvoiceRecord(invoice,invoice.updatedAt,true);
+    const saved=state.invoices.find(entry=>entry.id===invoice.id);
+    if(!saved?.qrData?.account||!saved.qrData?.creditor)throw new Error('QR-Zahlteil konnte nicht erzeugt werden. Bitte unter Einstellungen Firma/Name, IBAN, Strasse, Hausnummer sowie PLZ/Ort speichern.');
+    return saved;
+  }finally{await releaseCurrentEditLock()}
+}
 async function findGeneratedPdf(type,id,documentHash){const {data,error}=await supabaseClient.from('file_attachments').select('id,file_name').eq('entity_type',type).eq('entity_id',id).eq('source','generated_pdf').eq('document_hash',documentHash).is('deleted_at',null).maybeSingle();if(error)throw error;return data}
 async function openStoredPdf(file){const {data:{session}}=await supabaseClient.auth.getSession();if(!session)throw new Error('Sitzung abgelaufen. Bitte neu anmelden.');const response=await fetch(`${SUPABASE_URL}/functions/v1/file-storage?action=download&fileId=${encodeURIComponent(file.id)}`,{headers:{Authorization:`Bearer ${session.access_token}`,apikey:SUPABASE_KEY}});if(!response.ok)throw new Error('Gespeichertes PDF konnte nicht geöffnet werden.');await deliverPdfBlob(await response.blob(),file.file_name)}
-async function storeGeneratedPdf(type,record,doc,documentHash){const data=new FormData();data.append('entityType',type);data.append('entityId',record.id);data.append('source','generated_pdf');data.append('documentHash',documentHash);data.append('file',new File([doc.output('blob')],`${record.number}.pdf`,{type:'application/pdf'}));const {data:saved,error}=await supabaseClient.functions.invoke('file-storage',{body:data});if(error)throw error;return saved}
+async function storeGeneratedPdf(type,record,doc,documentHash){
+  const data=new FormData();data.append('entityType',type);data.append('entityId',record.id);data.append('source','generated_pdf');data.append('documentHash',documentHash);data.append('file',new File([doc.output('blob')],`${record.number}.pdf`,{type:'application/pdf'}));
+  for(let attempt=0;attempt<3;attempt++){const {data:saved,error}=await supabaseClient.functions.invoke('file-storage',{body:data});if(!error)return saved;if(!/Failed to send a request to the Edge Function/i.test(error.message)||attempt===2)throw error;await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)))}
+}
 async function uploadAttachment(type,id,file){const data=new FormData();data.append('entityType',type);data.append('entityId',id);data.append('source','upload');data.append('file',file);const {error}=await supabaseClient.functions.invoke('file-storage',{body:data});if(error){const detail=await error.context?.json?.().catch(()=>null);throw new Error(detail?.detail||detail?.error||detail?.message||error.message)}}
 async function deliverPdfBlob(blob,fileName){
   const file=new File([blob],fileName,{type:'application/pdf'}),mobile=window.matchMedia?.('(max-width:900px)').matches||window.matchMedia?.('(pointer: coarse)').matches||window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;
@@ -744,6 +766,7 @@ renderCloudSettings=async function(){
   try{
     if(!(await acquireEditLock('settings',SETTINGS_LOCK_ID))){setTitle('Einstellungen');$('#content').innerHTML=`<div class="card empty">${esc(editLockConflictMessage('Die Einstellungen'))}</div>`;return}
     state=await loadFromSupabase();state.settings.logo||=DEFAULT_LOGO;originalRenderCloudSettings();
+    const streetInput=$('#settings-form input[name="street"]'),streetLabel=streetInput?.closest('label');if(streetLabel){streetLabel.firstChild.nodeValue='Strasse (ohne Hausnummer)';streetLabel.insertAdjacentHTML('afterend',`<label>Hausnummer<input name="qrBuildingNumber" value="${esc(state.settings.qrBuildingNumber||'')}"><span class="hint">Für die QR-Rechnung separat erfassen.</span></label>`)}
     [...document.querySelectorAll('.backup-actions button')].find(button=>button.textContent.includes('importieren'))?.remove();
     $('#content').insertAdjacentHTML('beforeend','<div class="card settings-block"><h2>Positionsvorlagen</h2><p class="hint">Lege häufig verwendete Positionen mit Standardpreis fest. Beim Auftrag wird eine Kopie eingefügt und kann danach frei angepasst werden. Die Vorlagen gelten für alle Benutzer.</p><button type="button" class="secondary" onclick="openPositionTemplates()">Vorlagen bearbeiten</button></div>');
     $('#content').insertAdjacentHTML('beforeend','<div class="card settings-block"><h2>Meine Listenansicht</h2><p class="hint">Lege für Kunden, Aufträge, Rechnungen und Quittungen fest, welche Informationen in deiner Liste erscheinen und in welcher Reihenfolge. Diese Auswahl gilt nur für deinen Benutzer.</p><button type="button" class="secondary" onclick="openListSettings()">Listenansicht anpassen</button></div>');
@@ -792,8 +815,9 @@ async function preparePdfLogo(source){
 }
 
 async function pdfDocument(type,id){
-  const invoice=state.invoices.find(x=>x.id===id),d=type==='order'?state.orders.find(x=>x.id===id):type==='receipt'?invoice?.receipt:invoice;if(!d)return;
+  let invoice=state.invoices.find(x=>x.id===id),d=type==='order'?state.orders.find(x=>x.id===id):type==='receipt'?invoice?.receipt:invoice;if(!d)return;
   const done=showWorking('PDF wird erstellt und gespeichert …');try{
+  if(type==='invoice'){invoice=await ensureInvoiceQrData(invoice);d=invoice}
   const documentHash=await pdfHash(type,d),existingPdf=await findGeneratedPdf(type,d.id,documentHash);if(existingPdf){try{await openStoredPdf(existingPdf);return}catch(error){console.warn('Gespeichertes PDF fehlt, es wird neu erzeugt.',error)}}
   if(!window.jspdf?.jsPDF){alert('Die PDF-Funktion konnte nicht geladen werden. Bitte Internetverbindung prüfen und die Seite neu laden.');return}
   const {jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4'}),s=state.settings,isInv=type==='invoice',isReceipt=type==='receipt';
@@ -805,17 +829,18 @@ async function pdfDocument(type,id){
     decorate();await addLogo();doc.setTextColor(...ink);
     const customer=[d.customerSnapshot?.name,d.customerSnapshot?.billing?.street,[d.customerSnapshot?.billing?.zip,d.customerSnapshot?.billing?.city].filter(Boolean).join(' ')].filter(Boolean),title=isReceipt?'Quittung':isInv?'Rechnung':'Auftrag';
     doc.setTextColor(...ink);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text(isReceipt?'Quittung für':'Rechnungsempfänger',20,36);doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text(customer.map(String),20,43);
-    const meta=isReceipt?[['Belegnummer:',d.number],['Datum:',date(d.date)],['Rechnung:',d.invoiceNumber||'–'],['Auftrag:',d.orderNumber||'–']]:isInv?[['Datum:',date(d.date)],['Rechnungsnummer:',d.number],['Fällig am:',date(d.dueDate)],['Kundennummer:',d.customerSnapshot?.number||'–']]:[['Datum:',date(d.date)],['Auftragsnummer:',d.number],[`${d.fulfilment||'Erfüllung'}:`,date(d.fulfilmentDate)],['Kundennummer:',d.customerSnapshot?.number||'–']];
-    doc.setFontSize(9);meta.forEach(([label,value],index)=>{const y=62+index*7;doc.setTextColor(...muted);doc.text(String(label),130,y);doc.setTextColor(...ink);doc.text(String(value),190,y,{align:'right'})});
-    doc.setFont('times','italic');doc.setFontSize(29);doc.text(title,20,103);doc.setFont('times','italic');doc.setFontSize(14);doc.text(isReceipt?'Zahlung dankend erhalten.':'Liebe Kundin, lieber Kunde,',20,117);doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...muted);doc.text(isReceipt?'Der folgende Rechnungsbetrag wurde vollständig bezahlt.':isInv?'Vielen Dank für deine Bestellung. Wir berechnen dir folgende Leistungen und Produkte:':'Vielen Dank für deinen Auftrag. Folgende Leistungen und Produkte sind vorgesehen:',20,127);
-    let y=142;doc.setFillColor(...rose);doc.roundedRect(15,y,180,10,2,2,'F');doc.setTextColor(...ink);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Beschreibung',20,y+6.5);doc.text('Menge',130,y+6.5);doc.text('Einzelpreis',151,y+6.5);doc.text('Betrag',190,y+6.5,{align:'right'});y+=12;doc.setFont('helvetica','normal');
+    const meta=isReceipt?[['Belegnummer:',d.number],['Datum:',date(d.date)],['Rechnung:',d.invoiceNumber||'–'],['Auftrag:',d.orderNumber||'–']]:isInv?[['Datum:',date(d.date)],['Rechnungsnummer:',d.number],['Auftragsnummer:',d.orderNumber||'–'],['Fällig am:',date(d.dueDate)],['Kundennummer:',d.customerSnapshot?.number||'–']]:[['Datum:',date(d.date)],['Auftragsnummer:',d.number],[`${d.fulfilment||'Erfüllung'}:`,date(d.fulfilmentDate)],['Kundennummer:',d.customerSnapshot?.number||'–']];
+    doc.setFontSize(9);meta.forEach(([label,value],index)=>{const y=(isInv?59:62)+index*(isInv?5.5:7);doc.setTextColor(...muted);doc.text(String(label),130,y);doc.setTextColor(...ink);doc.text(String(value),190,y,{align:'right'})});
+    const invoiceCompact=isInv;doc.setFont('times','italic');doc.setFontSize(29);doc.text(title,20,invoiceCompact?91:103);doc.setFont('times','italic');doc.setFontSize(14);doc.text(isReceipt?'Zahlung dankend erhalten.':'Liebe Kundin, lieber Kunde,',20,invoiceCompact?100:117);doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...muted);doc.text(isReceipt?'Der folgende Rechnungsbetrag wurde vollständig bezahlt.':isInv?'Vielen Dank für deine Bestellung. Wir berechnen dir folgende Leistungen und Produkte:':'Vielen Dank für deinen Auftrag. Folgende Leistungen und Produkte sind vorgesehen:',20,invoiceCompact?108:127);
+    let y=invoiceCompact?120:142;doc.setFillColor(...rose);doc.roundedRect(15,y,180,10,2,2,'F');doc.setTextColor(...ink);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Beschreibung',20,y+6.5);doc.text('Menge',130,y+6.5);doc.text('Einzelpreis',151,y+6.5);doc.text('Betrag',190,y+6.5,{align:'right'});y+=12;doc.setFont('helvetica','normal');
     for(const item of d.items){const lines=doc.splitTextToSize(String(item.description||''),102),height=Math.max(9,lines.length*4.5+3);if(y+height>238){doc.addPage();decorate();y=24;doc.setFillColor(...rose);doc.rect(15,y,180,10,'F');doc.setFont('helvetica','bold');doc.text('Beschreibung',20,y+6.5);doc.text('Menge',130,y+6.5);doc.text('Einzelpreis',151,y+6.5);doc.text('Betrag',190,y+6.5,{align:'right'});doc.setFont('helvetica','normal');y+=12}doc.text(lines,20,y+4);doc.text(String(item.quantity),130,y+4);doc.text(money(item.price),151,y+4);doc.text(money(item.total),190,y+4,{align:'right'});doc.setDrawColor(222,217,214);doc.line(15,y+height,195,y+height);y+=height}
     y+=7;doc.setDrawColor(...roseStrong);doc.line(112,y,195,y);y+=9;doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text('Gesamtbetrag',116,y);doc.setFontSize(16);doc.text(money(d.total),190,y,{align:'right'});y+=7;
-    const companyLines=[...businessIdentityLines(s),...businessAddressLines(s)].filter(Boolean),bankLines=[s.bankName,...String(s.bankAddress||'').split(/\r?\n/).filter(Boolean),s.iban?`IBAN: ${s.iban}`:''].filter(Boolean);
+    if(isInv){doc.setTextColor(...ink);doc.setFont('times','italic');doc.setFontSize(20);doc.text('Vielen Dank!',65,y-7,{align:'center'})}
+    const qrOnCurrentPage=isInv&&y<=188,companyLines=[...businessIdentityLines(s),...businessAddressLines(s)].filter(Boolean);
     if(isReceipt){doc.setFillColor(...rose);doc.roundedRect(112,y,83,12,2,2,'F');doc.setFontSize(12);doc.text('Bezahlt',117,y+8.5);doc.text(money(d.total),190,y+8.5,{align:'right'});doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Quittungsinformationen',20,225);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);[...companyLines,`Rechnung: ${d.invoiceNumber||'–'}`,`Bezahlt am ${date(d.date)}`,`Zahlungsart: ${d.paymentMethod||'–'}`].forEach((line,index)=>doc.text(line,20,233+index*4.5))}
-    else if(isInv){doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Rechnungsinformationen',20,225);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);[...companyLines,`Zahlbar bis ${date(d.dueDate)}`,`Referenz: ${d.number}`].forEach((line,index)=>doc.text(line,20,233+index*4.5));if(bankLines.length){doc.setTextColor(...ink);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Bankinformationen',112,225);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);bankLines.forEach((line,index)=>doc.text(line,112,233+index*4.5))}}
-    else{doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Auftragsinformationen',20,225);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);const info=[...companyLines,`${d.fulfilment||'Erfüllung'} am ${date(d.fulfilmentDate)}`];if(d.text)info.push(...doc.splitTextToSize(String(d.text),75));info.forEach((line,index)=>doc.text(line,20,233+index*4.5))}
-    doc.setTextColor(...ink);doc.setFont('times','italic');doc.setFontSize(isReceipt?24:20);doc.text('Vielen Dank!',105,270,{align:'center'});
+    else if(!isInv){doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Auftragsinformationen',20,225);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);const info=[...companyLines,`${d.fulfilment||'Erfüllung'} am ${date(d.fulfilmentDate)}`];if(d.text)info.push(...doc.splitTextToSize(String(d.text),75));info.forEach((line,index)=>doc.text(line,20,233+index*4.5))}
+    if(!isInv&&!qrOnCurrentPage){doc.setTextColor(...ink);doc.setFont('times','italic');doc.setFontSize(isReceipt?24:20);doc.text('Vielen Dank!',105,270,{align:'center'})}
+    if(isInv)await appendQrBill(doc,d,qrOnCurrentPage);
     const saved=await storeGeneratedPdf(type,d,doc,documentHash);await openStoredPdf(saved);return;
   }
   let y=18;
@@ -830,7 +855,7 @@ async function pdfDocument(type,id){
   if(d.text){doc.text(doc.splitTextToSize(String(d.text),175),15,y);y+=15}
   if(isReceipt){doc.setFontSize(12);doc.text('Der Rechnungsbetrag wurde vollständig bezahlt.',15,y);doc.setFontSize(10);doc.text(`Rechnung: ${d.invoiceNumber}`,15,y+8)}else if(isInv){doc.text(`Zahlbar bis ${date(d.dueDate)}`,15,y);doc.text(`IBAN: ${s.iban||''}`,15,y+6);doc.text(`Referenz: ${d.number}`,15,y+12)}
   const saved=await storeGeneratedPdf(type,d,doc,documentHash);await openStoredPdf(saved);
-  }finally{done()}
+  }catch(error){console.error('PDF konnte nicht erstellt werden:',error);alert(`PDF konnte nicht erstellt werden: ${error.message||'Unbekannter Fehler'}`)}finally{done()}
 }
 printDocument=async function(type,id){
   const invoice=state.invoices.find(x=>x.id===id),d=type==='order'?state.orders.find(x=>x.id===id):type==='receipt'?invoice?.receipt:invoice;if(!d)return;
