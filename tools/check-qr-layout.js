@@ -3,6 +3,7 @@ const source=fs.readFileSync('test/app.js','utf8'),match=source.match(/async fun
 assert(match,'appendQrBill fehlt');
 assert(source.includes('let y=invoiceCompact?120:142'),'Rechnung ist nicht verdichtet');
 assert(source.includes('else if(!isInv){doc.setFont'), 'Rechnungsfuss wird nicht übersprungen');
+assert(source.includes("['Auftragsnummer:',d.orderNumber||'–']"),'Auftragsnummer fehlt im Rechnungs-PDF');
 const qrBillPng=async()=> 'png';
 eval(`${match[0]}; globalThis.appendQrBill=appendQrBill`);
 const doc={pages:0,images:[],addPage(){this.pages++},addImage(...args){this.images.push(args)}};
