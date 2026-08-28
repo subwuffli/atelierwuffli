@@ -25,6 +25,8 @@ Deno.serve(async req=>{
   const token=req.headers.get("Authorization")||"",userClient=createClient(Deno.env.get("SUPABASE_URL")||"",Deno.env.get("SUPABASE_ANON_KEY")||"",{global:{headers:{Authorization:token}}});
   const {data:{user}}=await userClient.auth.getUser();
   if(!user)return response(JSON.stringify({error:"AUTH_REQUIRED"}),401,{"Content-Type":"application/json"});
+  const {data:isMember,error:memberError}=await userClient.rpc("is_erp_member_v1");
+  if(memberError||!isMember)return response(JSON.stringify({error:"ERP_MEMBER_REQUIRED"}),403,{"Content-Type":"application/json"});
   if(!adminKey)return response(JSON.stringify({error:"SERVER_KEY_MISSING"}),500,{"Content-Type":"application/json"});
   const admin=createClient(Deno.env.get("SUPABASE_URL")||"",adminKey);
 
