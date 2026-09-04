@@ -2,18 +2,18 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.90.0';
+const APP_VERSION='TEST V0.0.91.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
-let state,currentView='dashboard',realtimeChannel=null,presenceChannel=null,presenceHeartbeat=null,versionHeartbeat=null,presenceUser=null,lastUserActivity=Date.now(),lastPresenceTrack=0,remoteRevision=0,isSaving=false,customerSort='number-asc',orderSort='number-desc',invoiceSort='number-desc',receiptSort='number-desc',financeMonth=new Date().toISOString().slice(0,7),activeEditLock=null,lockHeartbeat=null,preferencesUserId=null;
+let state,currentView='dashboard',realtimeChannel=null,presenceChannel=null,presenceHeartbeat=null,versionHeartbeat=null,presenceUser=null,lastUserActivity=Date.now(),lastPresenceTrack=0,remoteRevision=0,isSaving=false,customerSort='number-asc',orderSort='number-desc',invoiceSort='number-desc',receiptSort='number-desc',financeMonth=new Date().toISOString().slice(0,7),financeYear=String(new Date().getFullYear()),bookkeepingTab='reports',activeEditLock=null,lockHeartbeat=null,preferencesUserId=null;
 let lastEditLockConflict=null;
 const LIST_COLUMN_OPTIONS={customers:[['number','Kundennummer'],['name','Kunde'],['contact','Kontakt'],['address','Adresse']],orders:[['number','Auftragsnummer'],['customer','Kunde'],['dates','Art / Termine'],['status','Status'],['total','Betrag']],invoices:[['number','Rechnungsnummer'],['customer','Kunde'],['due','Fällig am'],['status','Status'],['total','Betrag']],receipts:[['number','Quittungsnummer'],['invoice','Rechnung'],['customer','Kunde'],['date','Datum'],['total','Betrag']]};
 const defaultListColumns=()=>Object.fromEntries(Object.entries(LIST_COLUMN_OPTIONS).map(([view,options])=>[view,options.map(([id])=>id)]));
 let listColumns=defaultListColumns();
 const EDIT_SESSION_TOKEN=crypto.randomUUID();
 const DEVICE_ID=localStorage.getItem('atelier-wuffli-device-id')||crypto.randomUUID();localStorage.setItem('atelier-wuffli-device-id',DEVICE_ID);
-const blankState=()=>({version:2,revision:0,settings:{firstName:'',companyName:'',street:'',postalCity:'',bankName:'',bankAddress:'',iban:'',qrBuildingNumber:'',mwstNumber:'',paymentDays:30,logo:'',orderText:'',invoiceText:'',positionTemplates:[]},customers:[],orders:[],invoices:[],expenses:[],lastExport:null});
+const blankState=()=>({version:3,revision:0,settings:{firstName:'',companyName:'',street:'',postalCity:'',bankName:'',bankAddress:'',iban:'',qrBuildingNumber:'',mwstNumber:'',paymentDays:30,logo:'',orderText:'',invoiceText:'',positionTemplates:[]},customers:[],suppliers:[],orders:[],invoices:[],expenses:[],lastExport:null});
 const uid=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`;
 const today=()=>new Date().toISOString().slice(0,10);
 const dueDateFromFulfilment=d=>{const due=new Date(`${d||today()}T12:00:00`);due.setDate(due.getDate()+Number(state?.settings?.paymentDays??30));return due.toISOString().slice(0,10)};
@@ -37,10 +37,11 @@ function normalizeState(data){
   return {
     ...base,
     ...next,
-    version:2,
+    version:3,
     revision:Number(next.revision)||0,
     settings,
     customers:Array.isArray(next.customers)?next.customers:[],
+    suppliers:Array.isArray(next.suppliers)?next.suppliers:[],
     orders:Array.isArray(next.orders)?next.orders:[],
     invoices:Array.isArray(next.invoices)?next.invoices:[],
     expenses:Array.isArray(next.expenses)?next.expenses:[]
@@ -295,7 +296,7 @@ function showVersionUpdate(published){
   document.body.appendChild(banner);banner.querySelector('button').onclick=async()=>{if($('#modal').open&&!confirm('Das Formular ist noch geöffnet. Nicht gespeicherte Eingaben verwerfen und die neue Version laden?'))return;banner.querySelector('button').disabled=true;await releaseCurrentEditLock();location.reload()};
 }
 
-const viewLabel=view=>({dashboard:'Übersicht',appointments:'Termine',customers:'Kunden',orders:'Aufträge',invoices:'Rechnungen',receipts:'Quittungen',expenses:'Ausgaben',income:'Einnahmen',settings:'Einstellungen'}[view]||view);
+const viewLabel=view=>({dashboard:'Übersicht',appointments:'Termine',customers:'Kunden',orders:'Aufträge',invoices:'Rechnungen',receipts:'Quittungen',expenses:'Ausgaben',income:'Einnahmen',bookkeeping:'Buchhaltung',settings:'Einstellungen'}[view]||view);
 function deviceLabel(){const ua=navigator.userAgent||'';if(/iPad|Tablet/i.test(ua))return'Tablet';if(/iPhone|iPod/i.test(ua))return'iPhone';if(/Android/i.test(ua))return/Mobile/i.test(ua)?'Android-Smartphone':'Android-Tablet';if(/Macintosh|Mac OS/i.test(ua))return'Mac';if(/Windows/i.test(ua))return'Windows-PC';if(/Linux/i.test(ua))return'Linux-PC';return'Gerät'}
 function presencePayload(){return{sessionId:EDIT_SESSION_TOKEN,deviceId:DEVICE_ID,device:deviceLabel(),userId:presenceUser?.id||EDIT_SESSION_TOKEN,email:presenceUser?.email||'Unbekannter Benutzer',name:presenceUser?.user_metadata?.full_name||presenceUser?.user_metadata?.name||presenceUser?.email?.split('@')[0]||'Benutzer',lastActive:new Date(lastUserActivity).toISOString(),view:currentView}}
 async function trackUserPresence(force=false){if(!presenceChannel||!presenceUser)return;const now=Date.now();if(!force&&now-lastPresenceTrack<12000)return;lastPresenceTrack=now;await presenceChannel.track(presencePayload())}
@@ -489,9 +490,25 @@ const monthKey=d=>String(d||'').slice(0,7);
 const monthLabel=m=>new Intl.DateTimeFormat('de-CH',{month:'short',year:'2-digit'}).format(new Date(`${m}-01T12:00:00`));
 function lastTwelveMonths(){const now=new Date(),months=[];for(let n=11;n>=0;n--){const d=new Date(now.getFullYear(),now.getMonth()-n,1);months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`)}return months}
 function financeChart(entries,dateOf,amountOf){const months=lastTwelveMonths(),totals=months.map(m=>entries.filter(x=>monthKey(dateOf(x))===m).reduce((s,x)=>s+Number(amountOf(x)||0),0)),max=Math.max(...totals,1);return `<div class="card finance-chart"><h2>Letzte 12 Monate</h2><div class="bar-chart">${months.map((m,i)=>`<div class="bar-column"><span class="bar-value">${totals[i]?money(totals[i]):'–'}</span><div class="bar" style="height:${Math.max(totals[i]?6:0,totals[i]/max*100)}%"></div><span class="bar-label">${monthLabel(m)}</span></div>`).join('')}</div></div>`}
-function expenseForm(id){const x=state.expenses.find(e=>e.id===id)||{date:today(),amount:''};modal(id?'Ausgabe bearbeiten':'Neue Ausgabe',`<form id="expense-form"><div class="form-grid"><label>Datum<input name="date" type="date" value="${x.date}" required></label><label>Betrag CHF<input name="amount" type="number" min="0" step="0.01" value="${x.amount}" required></label><label class="span-2">Beschreibung<textarea name="description" required>${esc(x.description)}</textarea></label></div><div class="form-actions"><button type="button" class="secondary" onclick="closeModal()">Abbrechen</button><button class="primary">Speichern</button></div></form>`);$('#expense-form').onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.target));data.amount=Number(data.amount);if(id)Object.assign(x,data,{updatedAt:new Date().toISOString()});else state.expenses.push({...data,id:uid(),createdAt:new Date().toISOString()});await save();closeModal();financeMonth=monthKey(data.date);saveUserPreferences();renderExpenses();notice('Ausgabe gespeichert.')}}
+const EXPENSE_CATEGORIES=['Material','Fahrzeug','Telefon / Internet','Raumkosten','Bankspesen','Versicherung','Werbung','Anlagen','Sonstiges'];
+const PAYMENT_METHODS=['Überweisung','Barzahlung','TWINT','Karte'];
+const supplierOptions=(selected='')=>`<option value="">Kein Lieferant ausgewählt</option>${state.suppliers.filter(supplier=>!supplier.archived||supplier.id===selected).sort((a,b)=>a.name.localeCompare(b.name,'de')).map(supplier=>`<option value="${supplier.id}" ${supplier.id===selected?'selected':''}>${esc(supplier.name)}${supplier.archived?' (archiviert)':''}</option>`).join('')}`;
+const expenseBusinessAmount=expense=>Math.max(0,Number(expense.amount||0)-Number(expense.privateShare||0));
+const supplierName=expense=>state.suppliers.find(supplier=>supplier.id===expense.supplierId)?.name||'–';
+
+function expenseForm(id){
+  const x=state.expenses.find(expense=>expense.id===id)||{date:today(),amount:'',supplierId:'',category:'Material',paymentStatus:'Bezahlt',dueDate:'',paidDate:today(),paymentMethod:'Überweisung',vatRate:0,privateShare:0};
+  modal(id?'Ausgabe bearbeiten':'Neue Ausgabe',`<form id="expense-form"><div class="form-grid"><label>Datum<input name="date" type="date" value="${x.date}" required></label><label>Bruttobetrag CHF<input name="amount" type="number" min="0" step="0.01" value="${x.amount}" required></label><label>Lieferant<select name="supplierId">${supplierOptions(x.supplierId)}</select></label><label>Kategorie<select name="category">${EXPENSE_CATEGORIES.map(category=>`<option ${category===x.category?'selected':''}>${esc(category)}</option>`).join('')}</select></label><label>Rechnungsstatus<select name="paymentStatus"><option ${x.paymentStatus==='Offen'?'selected':''}>Offen</option><option ${x.paymentStatus!=='Offen'?'selected':''}>Bezahlt</option></select></label><label>Fällig am<input name="dueDate" type="date" value="${x.dueDate||''}"></label><label data-payment-field>Bezahlt am<input name="paidDate" type="date" value="${x.paidDate||''}"></label><label data-payment-field>Zahlungsart<select name="paymentMethod"><option value="">Nicht angegeben</option>${PAYMENT_METHODS.map(method=>`<option ${method===x.paymentMethod?'selected':''}>${method}</option>`).join('')}</select></label><label>MWST-Satz<select name="vatRate">${[0,2.6,3.8,8.1].map(rate=>`<option value="${rate}" ${Number(x.vatRate)===rate?'selected':''}>${rate.toFixed(1)} %</option>`).join('')}</select></label><label>Privatanteil CHF<input name="privateShare" type="number" min="0" step="0.01" value="${x.privateShare||0}"><span class="hint">Wird nicht als Geschäftsaufwand gezählt.</span></label><label class="span-2">Beschreibung<textarea name="description" required>${esc(x.description)}</textarea></label><div class="span-2 form-summary">Geschäftsaufwand: <strong id="expense-business-amount">${money(expenseBusinessAmount(x))}</strong></div></div><div class="form-actions"><button type="button" class="secondary" onclick="closeModal()">Abbrechen</button><button class="primary">Speichern</button></div></form>`);
+  const form=$('#expense-form'),sync=()=>{const paid=form.paymentStatus.value==='Bezahlt';form.querySelectorAll('[data-payment-field] input,[data-payment-field] select').forEach(field=>field.disabled=!paid);if(paid&&!form.paidDate.value)form.paidDate.value=form.date.value||today();const privateShare=Math.max(0,Number(form.privateShare.value)||0),amount=Math.max(0,Number(form.amount.value)||0);$('#expense-business-amount').textContent=money(Math.max(0,amount-privateShare))};
+  form.paymentStatus.onchange=sync;form.amount.oninput=sync;form.privateShare.oninput=sync;sync();
+  form.onsubmit=async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(form));data.amount=Number(data.amount);data.vatRate=Number(data.vatRate);data.privateShare=Number(data.privateShare)||0;if(data.privateShare>data.amount){alert('Der Privatanteil darf nicht höher als der Bruttobetrag sein.');return}if(data.paymentStatus==='Bezahlt'){data.paidDate=data.paidDate||data.date}else{data.paidDate='';data.paymentMethod=''}if(id)Object.assign(x,data,{updatedAt:new Date().toISOString()});else state.expenses.push({...data,id:uid(),createdAt:new Date().toISOString()});await save();closeModal();financeMonth=monthKey(data.date);saveUserPreferences();renderExpenses();notice('Ausgabe gespeichert.')};
+}
 async function deleteExpense(id){const x=state.expenses.find(e=>e.id===id);if(x)await deleteRecord('expense',id,x.description||'Ausgabe')}
-function renderExpenses(){setTitle('Ausgaben');const rows=state.expenses.filter(x=>monthKey(x.date)===financeMonth).sort((a,b)=>b.date.localeCompare(a.date)),total=rows.reduce((s,x)=>s+Number(x.amount),0);$('#content').innerHTML=`<div class="section-head"><div class="actions"><button class="primary" onclick="expenseForm()">Neue Ausgabe</button><label>Monat<input id="finance-month" type="month" value="${financeMonth}"></label><button class="secondary" onclick="pdfMonthlyReport('expenses','${financeMonth}')">Monatsbericht PDF</button></div></div><div class="grid stats finance-stats"><div class="card stat"><span class="muted">Ausgaben ${monthLabel(financeMonth)}</span><strong>${money(total)}</strong></div><div class="card stat"><span class="muted">Einträge</span><strong>${rows.length}</strong></div></div>${financeChart(state.expenses,x=>x.date,x=>x.amount)}<div class="section-head"><h2>Ausgaben ${monthLabel(financeMonth)}</h2></div>${rows.length?`<div class="table-wrap"><table><thead><tr><th>Nummer</th><th>Datum</th><th>Beschreibung</th><th>Betrag</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.number||'–')}</td><td>${date(x.date)}</td><td>${esc(x.description)}</td><td>${money(x.amount)}</td><td><div class="actions"><button class="secondary" onclick="expenseForm('${x.id}')">Bearbeiten</button><button class="danger" onclick="deleteExpense('${x.id}')">Löschen</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="card empty">Keine Ausgaben in diesem Monat.</div>'}`;$('#finance-month').onchange=e=>{financeMonth=e.target.value;saveUserPreferences();renderExpenses()}}
+function renderExpenses(){
+  setTitle('Ausgaben');const rows=state.expenses.filter(expense=>monthKey(expense.date)===financeMonth).sort((a,b)=>b.date.localeCompare(a.date)),total=rows.reduce((sum,expense)=>sum+expenseBusinessAmount(expense),0);
+  $('#content').innerHTML=`<div class="section-head"><div class="actions"><button class="primary" onclick="expenseForm()">Neue Ausgabe</button><button class="secondary" onclick="render('bookkeeping')">Buchhaltung</button><label>Monat<input id="finance-month" type="month" value="${financeMonth}"></label><button class="secondary" onclick="pdfMonthlyReport('expenses','${financeMonth}')">Monatsbericht PDF</button></div></div><div class="grid stats finance-stats"><div class="card stat"><span class="muted">Geschäftsausgaben ${monthLabel(financeMonth)}</span><strong>${money(total)}</strong></div><div class="card stat"><span class="muted">Einträge</span><strong>${rows.length}</strong></div></div>${financeChart(state.expenses,expense=>expense.date,expense=>expenseBusinessAmount(expense))}<div class="section-head"><h2>Ausgaben ${monthLabel(financeMonth)}</h2></div>${rows.length?`<div class="table-wrap"><table><thead><tr><th>Nummer</th><th>Datum</th><th>Lieferant / Beschreibung</th><th>Kategorie</th><th>Status</th><th>Geschäftsaufwand</th><th></th></tr></thead><tbody>${rows.map(expense=>`<tr><td>${esc(expense.number||'–')}</td><td>${date(expense.date)}</td><td>${esc(supplierName(expense))}<br><span class="muted">${esc(expense.description)}</span></td><td>${esc(expense.category||'Sonstiges')}</td><td><span class="badge ${expense.paymentStatus==='Offen'?'warn':'ok'}">${esc(expense.paymentStatus||'Bezahlt')}</span></td><td>${money(expenseBusinessAmount(expense))}${Number(expense.privateShare||0)?`<br><span class="muted">Privat ${money(expense.privateShare)}</span>`:''}</td><td><div class="actions"><button class="secondary" onclick="expenseForm('${expense.id}')">Bearbeiten</button><button class="danger" onclick="deleteExpense('${expense.id}')">Löschen</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="card empty">Keine Ausgaben in diesem Monat.</div>'}`;
+  $('#finance-month').onchange=event=>{financeMonth=event.target.value;saveUserPreferences();renderExpenses()};
+}
 const incomeDate=i=>i.paidDate||i.receipt?.date||i.date;
 function renderIncome(){setTitle('Einnahmen');const paid=state.invoices.filter(i=>i.status==='Bezahlt'),rows=paid.filter(i=>monthKey(incomeDate(i))===financeMonth).sort((a,b)=>incomeDate(b).localeCompare(incomeDate(a))),total=rows.reduce((s,i)=>s+Number(i.total),0);$('#content').innerHTML=`<div class="section-head"><div class="actions"><label>Monat<input id="finance-month" type="month" value="${financeMonth}"></label><button class="secondary" onclick="pdfMonthlyReport('income','${financeMonth}')">Monatsbericht PDF</button></div></div><div class="grid stats finance-stats"><div class="card stat"><span class="muted">Einnahmen ${monthLabel(financeMonth)}</span><strong>${money(total)}</strong></div><div class="card stat"><span class="muted">Bezahlte Rechnungen</span><strong>${rows.length}</strong></div></div>${financeChart(paid,incomeDate,i=>i.total)}<div class="section-head"><h2>Einnahmen ${monthLabel(financeMonth)}</h2></div>${rows.length?`<div class="table-wrap"><table><thead><tr><th>Zahlungsdatum</th><th>Rechnung</th><th>Kunde</th><th>Betrag</th></tr></thead><tbody>${rows.map(i=>`<tr><td>${date(incomeDate(i))}</td><td>${esc(i.number)}</td><td>${esc(i.customerSnapshot?.name)}</td><td>${money(i.total)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="card empty">Keine Einnahmen in diesem Monat.</div>'}`;$('#finance-month').onchange=e=>{financeMonth=e.target.value;saveUserPreferences();renderIncome()}}
 async function pdfMonthlyReport(kind,month){
@@ -570,7 +587,7 @@ async function importCloudData(e){
   const file=e.target.files[0];e.target.value='';if(!file)return;
   try{
     const data=JSON.parse(await file.text());
-    if(![1,2].includes(Number(data.version))||!Array.isArray(data.customers)||!Array.isArray(data.orders)||!Array.isArray(data.invoices)||!data.settings)throw new Error('Ungültiges Backup-Format');
+    if(![1,2,3].includes(Number(data.version))||!Array.isArray(data.customers)||!Array.isArray(data.orders)||!Array.isArray(data.invoices)||!data.settings)throw new Error('Ungültiges Backup-Format');
     if(!confirm(`Import enthält ${data.customers.length} Kunden, ${data.orders.length} Aufträge und ${data.invoices.length} Rechnungen. Der gesamte aktuelle Supabase-Datenbestand wird ersetzt. Fortfahren?`))return;
     const currentRevision=state.revision;
     repairEncoding(data);state=normalizeState(data);state.revision=currentRevision;
@@ -888,7 +905,101 @@ orderForm=async function(id){
 renderCustomers=renderCloudCustomers;
 renderOrders=renderSortableOrders;
 renderInvoices=renderSortableInvoices;
-Object.assign(window,{customerForm,orderForm,invoiceForm,createInvoice,createReceipt,expenseForm,deleteExpense,pdfMonthlyReport,printDocument,pdfDocument,toggleArchive,exportData,closeModal,reloadCloudData,openPositionTemplates});
+const saveSupplierRecord=(record,stamp=null,locked=false)=>saveRecordRpc('save_supplier_v1','p_supplier',record,stamp,locked);
+
+async function supplierForm(id){
+  let supplier=id?state.suppliers.find(entry=>entry.id===id):null;
+  if(id){
+    try{
+      if(!(await acquireEditLock('supplier',id))){alert(editLockConflictMessage('Dieser Lieferant'));return}
+      state=await loadFromSupabase();supplier=state.suppliers.find(entry=>entry.id===id);
+    }catch(error){await releaseCurrentEditLock();alert(`Lieferant konnte nicht geöffnet werden: ${error.message}`);return}
+  }
+  const record=supplier||{id:uid(),name:'',email:'',phone:'',street:'',zip:'',city:'',notes:'',archived:false};
+  modal(id?'Lieferant bearbeiten':'Lieferant erfassen',`<form id="supplier-form"><div class="form-grid"><label>Firma / Name<input name="name" value="${esc(record.name)}" required></label><label>E-Mail<input name="email" type="email" value="${esc(record.email)}"></label><label>Telefon<input name="phone" type="tel" value="${esc(record.phone)}"></label><label>Strasse<input name="street" value="${esc(record.street)}"></label><label>PLZ<input name="zip" value="${esc(record.zip)}"></label><label>Ort<input name="city" value="${esc(record.city)}"></label><label class="span-2">Interne Notiz<textarea name="notes">${esc(record.notes)}</textarea></label></div><div class="form-actions"><button type="button" class="secondary" onclick="closeModal()">Abbrechen</button><button class="primary">Speichern</button></div></form>`);
+  $('#supplier-form').onsubmit=async event=>{event.preventDefault();const submit=event.currentTarget.querySelector('.primary'),data={...record,...Object.fromEntries(new FormData(event.currentTarget))};submit.disabled=true;submit.textContent='Wird gespeichert …';try{await saveSupplierRecord(data,supplier?.updatedAt||null,Boolean(supplier));await closeModal();renderBookkeeping();notice('Lieferant gespeichert.')}catch(error){alert(`Lieferant konnte nicht gespeichert werden: ${error.message}`)}finally{submit.disabled=false;submit.textContent='Speichern'}};
+}
+
+async function toggleSupplierArchive(id){
+  let supplier=state.suppliers.find(entry=>entry.id===id);if(!supplier)return;
+  try{
+    if(!(await acquireEditLock('supplier',id))){alert(editLockConflictMessage('Dieser Lieferant'));return}
+    state=await loadFromSupabase();supplier=state.suppliers.find(entry=>entry.id===id);
+    await saveSupplierRecord({...supplier,archived:!supplier.archived},supplier.updatedAt,true);
+    notice(supplier.archived?'Lieferant wieder aktiviert.':'Lieferant archiviert.');
+  }catch(error){alert(`Lieferantenstatus konnte nicht gespeichert werden: ${error.message}`)}finally{await releaseCurrentEditLock();renderBookkeeping()}
+}
+
+const inYear=(value,year=financeYear)=>String(value||'').slice(0,4)===String(year);
+const paidInvoices=()=>state.invoices.filter(invoice=>invoice.status==='Bezahlt');
+const paidExpenses=()=>state.expenses.filter(expense=>expense.paymentStatus==='Bezahlt');
+const openSupplierExpenses=()=>state.expenses.filter(expense=>expense.paymentStatus==='Offen');
+const paymentLabel=method=>method||'Nicht angegeben';
+const ledgerAccount=method=>method==='Barzahlung'?'cash':method?'bank':'';
+
+function ledgerEntries(account,year=financeYear){
+  const entries=[
+    ...paidInvoices().filter(invoice=>inYear(incomeDate(invoice),year)&&ledgerAccount(invoice.paymentMethod)===account).map(invoice=>({type:'invoice',id:invoice.id,date:incomeDate(invoice),number:invoice.number,description:invoice.customerSnapshot?.name||'Kunde',method:invoice.paymentMethod,amount:Number(invoice.total)||0,reconciledAt:invoice.paymentReconciledAt})),
+    ...paidExpenses().filter(expense=>inYear(expense.paidDate||expense.date,year)&&ledgerAccount(expense.paymentMethod)===account).map(expense=>({type:'expense',id:expense.id,date:expense.paidDate||expense.date,number:expense.number||'Ausgabe',description:`${supplierName(expense)} · ${expense.description}`,method:expense.paymentMethod,amount:-Number(expense.amount||0),reconciledAt:expense.paymentReconciledAt}))
+  ].sort((a,b)=>a.date.localeCompare(b.date)||a.number.localeCompare(b.number));
+  let balance=0;return entries.map(entry=>({...entry,balance:(balance+=entry.amount)}));
+}
+
+function renderSuppliers(){
+  const rows=[...state.suppliers].sort((a,b)=>a.name.localeCompare(b.name,'de'));
+  return `<div class="section-head"><div><h2>Lieferanten</h2><p class="muted">Lieferanten werden bei Ausgaben ausgewählt und bleiben auch bei späteren Belegen erhalten.</p></div><button class="primary" onclick="supplierForm()">Neuer Lieferant</button></div>${rows.length?`<div class="table-wrap"><table><thead><tr><th>Lieferant</th><th>Kontakt</th><th>Adresse</th><th>Status</th><th></th></tr></thead><tbody>${rows.map(supplier=>`<tr><td><strong>${esc(supplier.name)}</strong><br><span class="muted">${esc(supplier.notes||'')}</span></td><td>${esc(supplier.email||'–')}<br>${esc(supplier.phone||'')}</td><td>${esc([supplier.street,[supplier.zip,supplier.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')||'–')}</td><td><span class="badge ${supplier.archived?'warn':'ok'}">${supplier.archived?'Archiviert':'Aktiv'}</span></td><td><div class="actions"><button class="secondary" onclick="supplierForm('${supplier.id}')">Bearbeiten</button><button class="secondary" onclick="toggleSupplierArchive('${supplier.id}')">${supplier.archived?'Aktivieren':'Archivieren'}</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="card empty">Noch keine Lieferanten vorhanden.</div>'}`;
+}
+
+function renderLedger(account){
+  const cash=account==='cash',entries=ledgerEntries(account),total=entries.reduce((sum,entry)=>sum+entry.amount,0),unassigned=(cash?paidInvoices().filter(invoice=>inYear(incomeDate(invoice))&&invoice.paymentMethod==='').length+paidExpenses().filter(expense=>inYear(expense.paidDate||expense.date)&&expense.paymentMethod==='').length:0);
+  return `<div class="section-head"><div><h2>${cash?'Kassenbuch':'Bankbuch'} ${financeYear}</h2><p class="muted">Automatisch aus bezahlten Rechnungen und Ausgaben erzeugt. Keine doppelte Erfassung.</p></div><label>Jahr<input id="finance-year" type="number" min="2000" max="2100" value="${financeYear}"></label></div><div class="grid stats finance-stats"><div class="card stat"><span class="muted">Erfasster Saldo im Jahr</span><strong>${money(total)}</strong></div><div class="card stat"><span class="muted">Bewegungen</span><strong>${entries.length}</strong></div></div>${unassigned?`<p class="hint">${unassigned} bezahlte Belege ohne Zahlungsart erscheinen in keinem Buch.</p>`:''}${entries.length?`<div class="table-wrap"><table><thead><tr><th>Datum</th><th>Beleg</th><th>Text</th><th>Zahlungsart</th><th>Bewegung</th><th>Saldo</th><th>Abgleich</th></tr></thead><tbody>${entries.map(entry=>`<tr><td>${date(entry.date)}</td><td>${esc(entry.number)}</td><td>${esc(entry.description)}</td><td>${esc(entry.method)}</td><td class="${entry.amount<0?'amount-negative':'amount-positive'}">${entry.amount<0?'−':'+'}${money(Math.abs(entry.amount))}</td><td>${money(entry.balance)}</td><td><button class="secondary" onclick="setPaymentReconciled('${entry.type}','${entry.id}',${entry.reconciledAt?'false':'true'})">${entry.reconciledAt?'Abgeglichen':'Abgleichen'}</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="card empty">Keine zugeordneten Bewegungen in diesem Jahr.</div>'}`;
+}
+
+function annualReportData(){
+  const income=paidInvoices().filter(invoice=>inYear(incomeDate(invoice))),expenses=state.expenses.filter(expense=>inYear(expense.date)),businessExpenses=expenses.reduce((sum,expense)=>sum+expenseBusinessAmount(expense),0),payments=new Map();
+  income.forEach(invoice=>payments.set(paymentLabel(invoice.paymentMethod),(payments.get(paymentLabel(invoice.paymentMethod))||0)+Number(invoice.total||0)));
+  return {income,expenses,businessExpenses,payments,openCustomers:state.invoices.filter(invoice=>invoice.status==='Offen'&&!invoice.archived),openSuppliers:openSupplierExpenses()};
+}
+
+function renderReports(){
+  const data=annualReportData(),incomeTotal=data.income.reduce((sum,invoice)=>sum+Number(invoice.total||0),0),result=incomeTotal-data.businessExpenses;
+  return `<div class="section-head"><div><h2>Jahresauswertung</h2><p class="muted">Zahlungseingänge nach Zahlungsdatum; Geschäftsaufwand ohne Privatanteile.</p></div><div class="actions"><label>Jahr<input id="finance-year" type="number" min="2000" max="2100" value="${financeYear}"></label><button class="secondary" onclick="downloadAnnualCsv()">CSV exportieren</button><button class="secondary" onclick="pdfAnnualReport()">PDF</button></div></div><div class="grid stats"><div class="card stat"><span class="muted">Einnahmen</span><strong>${money(incomeTotal)}</strong></div><div class="card stat"><span class="muted">Geschäftsausgaben</span><strong>${money(data.businessExpenses)}</strong></div><div class="card stat"><span class="muted">Ergebnis vor Steuern</span><strong>${money(result)}</strong></div><div class="card stat"><span class="muted">Offene Kundenrechnungen</span><strong>${money(data.openCustomers.reduce((sum,invoice)=>sum+Number(invoice.total||0),0))}</strong></div></div><section class="card report-card"><h2>Jahresumsatz nach Zahlungsart</h2>${data.payments.size?`<div class="table-wrap"><table><thead><tr><th>Zahlungsart</th><th>Umsatz</th></tr></thead><tbody>${[...data.payments.entries()].sort(([a],[b])=>a.localeCompare(b,'de')).map(([method,total])=>`<tr><td>${esc(method)}</td><td>${money(total)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">Keine bezahlten Rechnungen in diesem Jahr.</p>'}</section><section class="report-grid"><div class="card report-card"><h2>Offene Kundenrechnungen</h2>${openCustomerTable(data.openCustomers)}</div><div class="card report-card"><h2>Offene Lieferantenrechnungen</h2>${openSupplierTable(data.openSuppliers)}</div></section>`;
+}
+
+const openCustomerTable=rows=>rows.length?`<div class="table-wrap"><table><thead><tr><th>Rechnung</th><th>Kunde</th><th>Fällig</th><th>Betrag</th></tr></thead><tbody>${rows.sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate))).map(invoice=>`<tr><td>${esc(invoice.number)}</td><td>${esc(invoice.customerSnapshot?.name||'–')}</td><td>${date(invoice.dueDate)}</td><td>${money(invoice.total)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">Keine offenen Kundenrechnungen.</p>';
+const openSupplierTable=rows=>rows.length?`<div class="table-wrap"><table><thead><tr><th>Ausgabe</th><th>Lieferant</th><th>Fällig</th><th>Betrag</th></tr></thead><tbody>${rows.sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate))).map(expense=>`<tr><td>${esc(expense.number||'–')}<br><span class="muted">${esc(expense.description)}</span></td><td>${esc(supplierName(expense))}</td><td>${date(expense.dueDate)}</td><td>${money(expense.amount)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">Keine offenen Lieferantenrechnungen.</p>';
+
+function openBookkeepingTab(tab){bookkeepingTab=tab;renderBookkeeping()}
+function renderBookkeeping(){
+  setTitle('Buchhaltung');$('#content').dataset.view='bookkeeping';const tabs=[['reports','Auswertungen'],['cash','Kasse'],['bank','Bank'],['suppliers','Lieferanten']];
+  $('#content').innerHTML=`<div class="bookkeeping-tabs" role="tablist">${tabs.map(([id,label])=>`<button class="${bookkeepingTab===id?'active':''}" type="button" onclick="openBookkeepingTab('${id}')">${label}</button>`).join('')}</div><section class="bookkeeping-content">${bookkeepingTab==='reports'?renderReports():bookkeepingTab==='cash'?renderLedger('cash'):bookkeepingTab==='bank'?renderLedger('bank'):renderSuppliers()}</section>`;
+  $('#finance-year')?.addEventListener('change',event=>{financeYear=String(Math.min(2100,Math.max(2000,Number(event.target.value)||new Date().getFullYear())));renderBookkeeping()});
+}
+
+async function setPaymentReconciled(type,id,reconciled){
+  try{
+    if(!(await acquireEditLock(type,id))){alert(editLockConflictMessage(type==='invoice'?'Diese Rechnung':'Diese Ausgabe'));return}
+    const {data,error}=await supabaseClient.rpc('set_payment_reconciled_v1',{p_entity_type:type,p_entity_id:id,p_reconciled:reconciled,p_session_token:EDIT_SESSION_TOKEN});if(error)throw error;
+    remoteRevision=Math.max(remoteRevision,Number(data.revision)||0);state=await loadFromSupabase();notice(reconciled?'Zahlung abgeglichen.':'Abgleich zurückgesetzt.');
+  }catch(error){alert(`Abgleich konnte nicht gespeichert werden: ${error.message}`)}finally{await releaseCurrentEditLock();renderBookkeeping()}
+}
+
+const csvCell=value=>`"${String(value??'').replaceAll('"','""')}"`;
+function downloadCsv(file,headers,rows){const body=[headers,...rows].map(row=>row.map(csvCell).join(';')).join('\r\n'),blob=new Blob(['\ufeff',body],{type:'text/csv;charset=utf-8'}),link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=file;link.click();URL.revokeObjectURL(link.href)}
+function downloadAnnualCsv(){const data=annualReportData(),rows=[...data.income.map(invoice=>['Einnahme',incomeDate(invoice),invoice.number,invoice.customerSnapshot?.name||'',paymentLabel(invoice.paymentMethod),invoice.total]),...data.expenses.map(expense=>['Ausgabe',expense.date,expense.number||'',supplierName(expense),expense.category||'Sonstiges',-expenseBusinessAmount(expense)])];downloadCsv(`buchhaltung-${financeYear}.csv`,['Art','Datum','Beleg','Partner','Kategorie / Zahlungsart','Geschäftsbetrag CHF'],rows);notice('Jahresauswertung als CSV exportiert.')}
+async function pdfAnnualReport(){
+  if(!window.jspdf?.jsPDF){alert('Die PDF-Funktion konnte nicht geladen werden.');return}
+  const data=annualReportData(),incomeTotal=data.income.reduce((sum,invoice)=>sum+Number(invoice.total||0),0),{jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4'});let y=22;
+  doc.setFontSize(20);doc.text(`Jahresauswertung ${financeYear}`,20,y);y+=12;doc.setFontSize(10);[['Einnahmen',incomeTotal],['Geschäftsausgaben',data.businessExpenses],['Ergebnis vor Steuern',incomeTotal-data.businessExpenses]].forEach(([label,value])=>{doc.text(label,20,y);doc.text(money(value),190,y,{align:'right'});y+=7});y+=6;doc.setFontSize(13);doc.text('Umsatz nach Zahlungsart',20,y);y+=8;doc.setFontSize(10);for(const [method,total] of [...data.payments.entries()].sort(([a],[b])=>a.localeCompare(b,'de'))){doc.text(method,20,y);doc.text(money(total),190,y,{align:'right'});y+=6}y+=6;doc.setFontSize(13);doc.text('Offene Posten',20,y);y+=8;doc.setFontSize(10);doc.text(`Kundenrechnungen: ${money(data.openCustomers.reduce((sum,invoice)=>sum+Number(invoice.total||0),0))}`,20,y);y+=6;doc.text(`Lieferantenrechnungen: ${money(data.openSuppliers.reduce((sum,expense)=>sum+Number(expense.amount||0),0))}`,20,y);await deliverPdf(doc,`Jahresauswertung-${financeYear}.pdf`);
+}
+
+const originalRender=render;
+render=function(view){
+  if(view!=='bookkeeping')return originalRender(view);
+  if(activeEditLock?.type==='settings')releaseCurrentEditLock();currentView=view;trackUserPresence(true).catch(()=>{});$('#content').dataset.view=view;$$('#nav button').forEach(button=>button.classList.toggle('active',button.dataset.view===view));$$('[data-mobile-view]').forEach(button=>button.classList.toggle('active',button.dataset.mobileView===view));$('.sidebar').classList.remove('open');renderBookkeeping();
+};
+openMoreMenu=function(){modal('Mehr',`<div class="more-grid">${[['customers','Kunden'],['orders','Aufträge'],['invoices','Rechnungen'],['receipts','Quittungen'],['expenses','Ausgaben'],['income','Einnahmen'],['bookkeeping','Buchhaltung'],['settings','Einstellungen'],['trash','Papierkorb']].map(([view,label])=>`<button type="button" class="secondary" data-more-view="${view}">${label}</button>`).join('')}</div>`);$('#modal-body').onclick=event=>{const view=event.target.closest('[data-more-view]')?.dataset.moreView;if(view){closeModal();render(view)}}};
+Object.assign(window,{customerForm,orderForm,invoiceForm,createInvoice,createReceipt,expenseForm,deleteExpense,pdfMonthlyReport,printDocument,pdfDocument,toggleArchive,exportData,closeModal,reloadCloudData,openPositionTemplates,supplierForm,toggleSupplierArchive,openBookkeepingTab,setPaymentReconciled,downloadAnnualCsv,pdfAnnualReport});
 window.addEventListener('error',event=>logClientError(event.message,{source:event.filename||'',line:event.lineno||0,column:event.colno||0}));
 window.addEventListener('unhandledrejection',event=>logClientError(event.reason?.message||event.reason||'Unbehandelter Promise-Fehler',{type:'unhandledrejection'}));
 init().catch(err=>{console.error(err);alert(`Supabase konnte nicht geladen werden. ${err?.message||'Bitte Internetverbindung und Datenbankeinrichtung prüfen.'}`)});

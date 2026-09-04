@@ -20,6 +20,8 @@ Die Publishable Keys der Browser-Apps dürfen öffentlich sein. Secret- und Serv
 
 ## Aktueller Teststand
 
+`TEST V0.0.91.0` ergänzt die Buchhaltungsbasis: Lieferanten, Ausgaben mit Kategorie, Zahlungsstatus, Fälligkeit, Zahlungsart, MWST-Satz und Privatanteil sowie automatische Kassen- und Bankbücher aus bereits bezahlten Belegen. Die Jahresauswertung enthält Einnahmen nach Zahlungsart, Einnahmen-/Ausgabenrechnung und offene Kunden- sowie Lieferantenrechnungen. Die Testmigration liegt unter `supabase/test-bookkeeping-v0091.sql`.
+
 `TEST V0.0.37.0` speichert Kunden, Aufträge, Rechnungen, Quittungen, Ausgaben und Einstellungen datensatzweise. Auftrag samt Positionen sowie Rechnung samt Positionen und Quittung werden jeweils in einer Datenbanktransaktion gespeichert. Gleichzeitige Änderungen werden über Sperren und den Zeitstempel `updated_at` erkannt, statt fremde Änderungen zu überschreiben.
 
 Die zugehörige Testmigration liegt unter `supabase/test-record-storage-v0037.sql` und ist ausschliesslich im Supabase-Testprojekt installiert.
