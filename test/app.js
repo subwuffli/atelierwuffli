@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.91.0';
+const APP_VERSION='TEST V0.0.92.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
@@ -956,7 +956,7 @@ function renderLedger(account){
 }
 
 function annualReportData(){
-  const income=paidInvoices().filter(invoice=>inYear(incomeDate(invoice))),expenses=state.expenses.filter(expense=>inYear(expense.date)),businessExpenses=expenses.reduce((sum,expense)=>sum+expenseBusinessAmount(expense),0),payments=new Map();
+  const income=paidInvoices().filter(invoice=>inYear(incomeDate(invoice))),expenses=paidExpenses().filter(expense=>inYear(expense.paidDate||expense.date)),businessExpenses=expenses.reduce((sum,expense)=>sum+expenseBusinessAmount(expense),0),payments=new Map();
   income.forEach(invoice=>payments.set(paymentLabel(invoice.paymentMethod),(payments.get(paymentLabel(invoice.paymentMethod))||0)+Number(invoice.total||0)));
   return {income,expenses,businessExpenses,payments,openCustomers:state.invoices.filter(invoice=>invoice.status==='Offen'&&!invoice.archived),openSuppliers:openSupplierExpenses()};
 }
