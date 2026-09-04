@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.89.0';
+const APP_VERSION='TEST V0.0.90.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
@@ -384,7 +384,7 @@ function focusReturnedDocument(){
     setTimeout(()=>row.classList.remove('document-return-focus'),1800);
   });
 }
-function startDocumentDetail(type,id,origin=currentView){documentDetailOrigin=origin;documentDetailHistory=[];activeDocumentDetail=null;documentListReturn={view:origin,id};showDocumentDetail(type,id)}
+function startDocumentDetail(type,id,origin=currentView){documentDetailOrigin=origin;documentDetailHistory=[];activeDocumentDetail=null;documentListReturn={view:origin,id};showDocumentDetail(type,id);window.scrollTo(0,0)}
 function navigateDocumentDetail(type,id){if(activeDocumentDetail)documentDetailHistory.push(activeDocumentDetail);showDocumentDetail(type,id)}
 function closeDocumentDetail(){const previous=documentDetailHistory.pop();if(previous)showDocumentDetail(previous.type,previous.id);else{render(documentDetailOrigin);focusReturnedDocument()}}
 function showDocumentDetail(type,id){
