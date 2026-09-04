@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://johkbmlozygtfjsqfkdu.supabase.co';
 const SUPABASE_KEY='sb_publishable_DGpxSu1ppS0fY7nbE75RSg_rI7G8UAb';
-const APP_VERSION='V0.0.87.0';
+const APP_VERSION='V0.0.88.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
@@ -481,54 +481,8 @@ async function pdfMonthlyReport(kind,month){
   const file=`${isExpense?'Ausgaben':'Einnahmen'}-${month}.pdf`;await deliverPdf(doc,file)
 }
 
-function renderSettings(){setTitle('Einstellungen');const s=state.settings;$('#content').innerHTML=`<form id="settings-form" class="card settings-block"><h2>Rechnungsinformationen</h2><div class="form-grid">${fields(s,[['name','Name / Firma'],['iban','IBAN'],['address','Adresse','text',true]])}<label>Zahlungsfrist in Tagen<input name="paymentDays" type="number" min="0" value="${s.paymentDays}"></label><label>Logo<input id="logo-file" type="file" accept="image/png,image/jpeg,image/webp"></label>${s.logo?`<img class="logo-preview" src="${s.logo}" alt="Aktuelles Logo">`:''}<label class="span-2">Standardtext Auftrag<textarea name="orderText">${esc(s.orderText)}</textarea></label><label class="span-2">Standardtext Rechnung<textarea name="invoiceText">${esc(s.invoiceText)}</textarea></label></div><div class="form-actions"><button class="primary">Einstellungen speichern</button></div></form><div class="card settings-block"><h2>Datensicherung</h2><p class="hint">Die Daten werden in Supabase gespeichert. Dieser Browser hält zusätzlich eine lokale Sicherung für den Offline- und Notfallbetrieb.</p><div class="backup-actions"><button class="primary" onclick="exportData()">Alle Daten exportieren</button><button class="secondary" onclick="document.querySelector('#import-file').click()">Daten ersetzen / importieren</button></div><p class="small muted">Letzter Export: ${state.lastExport?new Date(state.lastExport).toLocaleString('de-CH'):'Noch nie'}</p></div><div class="card settings-block danger-zone"><h2>Lokale Sicherung</h2><p>Damit wird nur die lokale Browser-Sicherung gelöscht. Die Daten in Supabase bleiben erhalten und werden nach dem Neuladen erneut abgerufen.</p><button class="danger" onclick="resetEverything()">Lokale Sicherung zurücksetzen</button></div>`;$('#settings-form').onsubmit=async e=>{e.preventDefault();Object.assign(s,Object.fromEntries(new FormData(e.target)),{paymentDays:Number(new FormData(e.target).get('paymentDays'))});await save();notice('Einstellungen gespeichert.')};$('#logo-file').onchange=e=>{const f=e.target.files[0];if(!f)return;if(f.size>1_500_000){alert('Das Logo darf maximal 1,5 MB gross sein.');return}const r=new FileReader();r.onload=async()=>{s.logo=r.result;await save();renderSettings();notice('Logo gespeichert.')};r.readAsDataURL(f)}}
-
 async function toggleArchive(kind,id){let x=state[kind].find(x=>x.id===id);if(!x)return;if(kind==='customers'){try{if(!(await acquireEditLock('customer',id))){alert(editLockConflictMessage('Dieser Kunde'));return}state=await loadFromSupabase();x=state.customers.find(customer=>customer.id===id);const expected=x.updatedAt,saved=await saveCustomerRecord({...x,archived:!x.archived},expected,true);Object.assign(x,saved);notice(x.archived?'Archiviert.':'Wieder aktiviert.')}catch(error){alert(`Kundenstatus konnte nicht gespeichert werden: ${error.message}`)}finally{await releaseCurrentEditLock()}render(currentView);return}if(!x.archived&&((kind==='orders'&&x.status!=='Abgeschlossen')||(kind==='invoices'&&x.status==='Offen'))){alert('Nur abgeschlossene Aufträge beziehungsweise bezahlte oder stornierte Rechnungen können archiviert werden.');return}x.archived=!x.archived;await save();render(currentView);notice(x.archived?'Archiviert.':'Wieder aktiviert.')}
-async function exportData(){state.lastExport=new Date().toISOString();await save();const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`atelier-wuffli-backup-${today()}.json`;a.click();URL.revokeObjectURL(a.href);if(currentView==='settings')renderSettings();notice('Datensicherung exportiert.')}
-async function importData(e){
-  const f=e.target.files[0];
-  e.target.value='';
-
-  if(!f)return;
-
-  try{
-    const data=JSON.parse(await f.text());
-
-    if(
-      data.version!==1 ||
-      !Array.isArray(data.customers) ||
-      !Array.isArray(data.orders) ||
-      !Array.isArray(data.invoices) ||
-      !data.settings
-    ){
-      throw new Error('Ungültiges Format');
-    }
-
-    if(!confirm(
-      `Import enthält ${data.customers.length} Kunden, ` +
-      `${data.orders.length} Aufträge und ` +
-      `${data.invoices.length} Rechnungen. ` +
-      `Diese Daten nach Supabase übernehmen?`
-    ))return;
-
-    // Alte lokale Passwortdaten werden nicht mehr benötigt
-    data.auth=null;
-
-    state=data;
-
-    // Lokale Sicherheitskopie behalten
-    await save();
-
-    render(currentView);
-    notice('Backup erfolgreich nach Supabase übertragen.');
-  }catch(err){
-    console.error(err);
-    alert(`Import fehlgeschlagen: ${err.message}`);
-  }
-}
-async function resetEverything(){if(confirm('Aktuellen Datenstand neu aus Supabase laden? Nicht gespeicherte Eingaben gehen verloren.')){state=await loadFromSupabase();render(currentView);notice('Daten neu geladen.')}}
-function docAddress(s){return esc(s||'').replaceAll('\n','<br>')}
-function printDocument(type,id){const d=type==='order'?state.orders.find(x=>x.id===id):state.invoices.find(x=>x.id===id);if(!d)return;const s=state.settings,isInv=type==='invoice',items=d.items.map(x=>`<tr><td>${esc(x.description)}</td><td>${x.quantity}</td><td>${money(x.price)}</td><td>${money(x.total)}</td></tr>`).join('');const fulfil=!isInv?`<p><strong>${esc(d.fulfilment)}</strong> am ${date(d.fulfilmentDate)}${d.fulfilment==='Lieferung'&&d.customerSnapshot.delivery?`<br>${esc(d.customerSnapshot.delivery.label)}<br>${esc(d.customerSnapshot.delivery.street)}<br>${esc(d.customerSnapshot.delivery.city)}`:''}</p>`:'';const html=`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${esc(d.number)}</title><style>@page{size:A4;margin:20mm}body{font:12px Arial;color:#222}header{display:flex;justify-content:space-between;min-height:120px}img{max-width:180px;max-height:80px}h1{font-size:24px;margin-top:40px}table{width:100%;border-collapse:collapse;margin-top:30px}th,td{text-align:left;padding:9px;border-bottom:1px solid #ccc}th:last-child,td:last-child{text-align:right}.total{text-align:right;font-size:18px;font-weight:bold;margin-top:20px}.footer{margin-top:45px;line-height:1.6}.muted{color:#666}@media print{button{display:none}}</style></head><body><button onclick="window.print()">Als PDF speichern / Drucken</button><header><div>${s.logo?`<img src="${s.logo}">`:''}<p><strong>${esc(s.name)}</strong><br>${docAddress(s.address)}</p></div><div><strong>${esc(d.customerSnapshot.name)}</strong><br>${esc(d.customerSnapshot.billing.street||'')}<br>${esc([d.customerSnapshot.billing.zip,d.customerSnapshot.billing.city].filter(Boolean).join(' '))}</div></header><h1>${isInv?'Rechnung':'Auftrag'} ${esc(d.number)}</h1><p>Datum: ${date(d.date)}${isInv?`<br>Auftrag: ${esc(d.orderNumber||'–')}`:''}</p>${fulfil}<table><thead><tr><th>Beschreibung</th><th>Menge</th><th>Einzelpreis</th><th>Betrag</th></tr></thead><tbody>${items}</tbody></table><p class="total">Gesamtbetrag: ${money(d.total)}</p><div class="footer">${docAddress(d.text)}${isInv?`<p>Zahlbar bis ${date(d.dueDate)}<br>IBAN: ${esc(s.iban)}<br>Referenz: ${esc(d.number)}</p>`:''}</div><script>setTimeout(()=>window.print(),400)<\/script></body></html>`;const w=window.open('','_blank');if(!w){alert('Bitte Pop-ups für die PDF-Ausgabe erlauben.');return}w.document.write(html);w.document.close()}
+async function exportData(){state.lastExport=new Date().toISOString();await save();const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`atelier-wuffli-backup-${today()}.json`;a.click();URL.revokeObjectURL(a.href);if(currentView==='settings')renderCloudSettings();notice('Datensicherung exportiert.')}
 
 function renderCloudSettings(){
   setTitle('Einstellungen');const s=state.settings;
@@ -773,7 +727,7 @@ expenseForm=async function(id){
   }
   originalExpenseForm(id);
   const form=$('#expense-form'),expense=id?state.expenses.find(x=>x.id===id):null,expectedUpdatedAt=expense?.updatedAt||null;
-  if(form){form.querySelector('.form-actions')?.insertAdjacentHTML('beforebegin','<label class="span-2">Belege anhängen <input name="attachments" type="file" accept="application/pdf,image/*" multiple><span class="hint">PDF oder Bild, maximal 8 MB pro Datei.</span></label>');const originalSubmit=form.onsubmit;form.onsubmit=async event=>{event.preventDefault();const files=[...form.elements.attachments.files];if(files.some(file=>file.size>8_000_000)){alert('Ein Beleg darf maximal 8 MB gross sein.');return}const cloudSave=save,cloudClose=closeModal,submit=form.querySelector('button.primary');let record;save=async()=>{};closeModal=async()=>{};submit.disabled=true;submit.textContent='Wird gespeichert …';try{await originalSubmit(event);record=id?state.expenses.find(x=>x.id===id):state.expenses[state.expenses.length-1];const saved=await saveExpenseRecord(record,expectedUpdatedAt,Boolean(expense));record.id=saved.id;for(const file of files)await uploadAttachment('expense',saved.id,file);await cloudClose();financeMonth=monthKey(record.date);saveUserPreferences();renderExpenses();notice(files.length?'Ausgabe und Beleg gespeichert.':'Ausgabe gespeichert.')}catch(error){alert(record?`Ausgabe gespeichert, Beleg konnte nicht hochgeladen werden: ${error.message}`:`Ausgabe konnte nicht gespeichert werden: ${error.message}`)}finally{save=cloudSave;closeModal=cloudClose;submit.disabled=false;submit.textContent='Speichern'}}}
+  if(form){form.querySelector('.form-actions')?.insertAdjacentHTML('beforebegin','<label class="span-2">Belege anhängen <input name="attachments" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" multiple><span class="hint">PDF, JPG, PNG oder WebP, maximal 8 MB pro Datei.</span></label>');const originalSubmit=form.onsubmit;form.onsubmit=async event=>{event.preventDefault();const files=[...form.elements.attachments.files],allowedTypes=['application/pdf','image/jpeg','image/png','image/webp'];if(files.some(file=>file.size>8_000_000||!allowedTypes.includes(file.type))){alert('Ein Beleg muss PDF, JPG, PNG oder WebP sein und darf maximal 8 MB gross sein.');return}const cloudSave=save,cloudClose=closeModal,submit=form.querySelector('button.primary');let record;save=async()=>{};closeModal=async()=>{};submit.disabled=true;submit.textContent='Wird gespeichert …';try{await originalSubmit(event);record=id?state.expenses.find(x=>x.id===id):state.expenses[state.expenses.length-1];const saved=await saveExpenseRecord(record,expectedUpdatedAt,Boolean(expense));record.id=saved.id;for(const file of files)await uploadAttachment('expense',saved.id,file);await cloudClose();financeMonth=monthKey(record.date);saveUserPreferences();renderExpenses();notice(files.length?'Ausgabe und Beleg gespeichert.':'Ausgabe gespeichert.')}catch(error){alert(record?`Ausgabe gespeichert, Beleg konnte nicht hochgeladen werden: ${error.message}`:`Ausgabe konnte nicht gespeichert werden: ${error.message}`)}finally{save=cloudSave;closeModal=cloudClose;submit.disabled=false;submit.textContent='Speichern'}}}
 };
 const SETTINGS_LOCK_ID='00000000-0000-0000-0000-000000000001';
 const originalRenderCloudSettings=renderCloudSettings;
@@ -897,7 +851,7 @@ orderForm=async function(id){
 renderCustomers=renderCloudCustomers;
 renderOrders=renderSortableOrders;
 renderInvoices=renderSortableInvoices;
-Object.assign(window,{customerForm,orderForm,invoiceForm,createInvoice,createReceipt,expenseForm,deleteExpense,pdfMonthlyReport,printDocument,pdfDocument,toggleArchive,exportData,closeModal,resetEverything,reloadCloudData,openPositionTemplates});
+Object.assign(window,{customerForm,orderForm,invoiceForm,createInvoice,createReceipt,expenseForm,deleteExpense,pdfMonthlyReport,printDocument,pdfDocument,toggleArchive,exportData,closeModal,reloadCloudData,openPositionTemplates});
 window.addEventListener('error',event=>logClientError(event.message,{source:event.filename||'',line:event.lineno||0,column:event.colno||0}));
 window.addEventListener('unhandledrejection',event=>logClientError(event.reason?.message||event.reason||'Unbehandelter Promise-Fehler',{type:'unhandledrejection'}));
 init().catch(err=>{console.error(err);alert(`Supabase konnte nicht geladen werden. ${err?.message||'Bitte Internetverbindung und Datenbankeinrichtung prüfen.'}`)});
