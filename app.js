@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://johkbmlozygtfjsqfkdu.supabase.co';
 const SUPABASE_KEY='sb_publishable_DGpxSu1ppS0fY7nbE75RSg_rI7G8UAb';
-const APP_VERSION='V0.0.88.0';
+const APP_VERSION='V0.0.90.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
@@ -368,10 +368,22 @@ function render(view){if(activeEditLock?.type==='settings'&&view!=='settings')re
 function openDocumentFromRow(view,row){const id=row?.dataset.recordId;if(!id)return;if(view==='orders'){if(state.orders.some(entry=>entry.id===id))startDocumentDetail('order',id,view)}else if(view==='invoices'){if(state.invoices.some(entry=>entry.id===id))startDocumentDetail('invoice',id,view)}else if(view==='receipts'){if(state.invoices.some(entry=>entry.id===id))startDocumentDetail('receipt',id,view)}}
 function detailValue(label,value){return `<div class="detail-value"><span>${esc(label)}</span><strong>${esc(value||'–')}</strong></div>`}
 function documentDetailItems(items=[]){return items.length?`<div class="table-wrap detail-items"><table><thead><tr><th>Beschreibung</th><th>Menge</th><th>Einzelpreis</th><th>Betrag</th></tr></thead><tbody>${items.map(item=>`<tr><td>${esc(item.description)}</td><td>${esc(item.quantity)}</td><td>${money(item.price)}</td><td>${money(item.total)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="card empty">Keine Positionen vorhanden.</div>'}
-let documentDetailOrigin='orders',documentDetailHistory=[],activeDocumentDetail=null;
-function startDocumentDetail(type,id,origin=currentView){documentDetailOrigin=origin;documentDetailHistory=[];activeDocumentDetail=null;showDocumentDetail(type,id)}
+let documentDetailOrigin='orders',documentDetailHistory=[],activeDocumentDetail=null,documentListReturn=null;
+function focusReturnedDocument(){
+  const target=documentListReturn;
+  documentListReturn=null;
+  if(!target||target.view!==currentView)return;
+  requestAnimationFrame(()=>{
+    const row=[...document.querySelectorAll('#content [data-record-id]')].find(entry=>entry.dataset.recordId===target.id);
+    if(!row)return;
+    row.scrollIntoView({block:'center'});
+    row.classList.add('document-return-focus');
+    setTimeout(()=>row.classList.remove('document-return-focus'),1800);
+  });
+}
+function startDocumentDetail(type,id,origin=currentView){documentDetailOrigin=origin;documentDetailHistory=[];activeDocumentDetail=null;documentListReturn={view:origin,id};showDocumentDetail(type,id);window.scrollTo(0,0)}
 function navigateDocumentDetail(type,id){if(activeDocumentDetail)documentDetailHistory.push(activeDocumentDetail);showDocumentDetail(type,id)}
-function closeDocumentDetail(){const previous=documentDetailHistory.pop();if(previous)showDocumentDetail(previous.type,previous.id);else render(documentDetailOrigin)}
+function closeDocumentDetail(){const previous=documentDetailHistory.pop();if(previous)showDocumentDetail(previous.type,previous.id);else{render(documentDetailOrigin);focusReturnedDocument()}}
 function showDocumentDetail(type,id){
   const order=type==='order'?state.orders.find(entry=>entry.id===id):null;
   const invoice=type==='order'?state.invoices.find(entry=>entry.orderId===order?.id||entry.id===order?.invoiceId):state.invoices.find(entry=>entry.id===id);
