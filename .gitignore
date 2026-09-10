@@ -5,3 +5,6 @@ dist/
 Atelierwuffli.jpeg
 Supabase.txt
 *.secret
+graphify-out/
+output/
+tmp/

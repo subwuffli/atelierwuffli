@@ -222,7 +222,6 @@ async function deliverPdfBlob(blob,fileName){
 const deliverPdf=(doc,fileName)=>deliverPdfBlob(doc.output('blob'),fileName);
 function activeCustomers(){return state.customers.filter(c=>!c.archived)}
 async function nextNumber(prefix,d=today()){const {data,error}=await supabaseClient.rpc('next_document_number',{p_prefix:prefix,p_date:d});if(error)throw error;return data}
-async function nextCustomerNumber(){const {data,error}=await supabaseClient.rpc('next_customer_number');if(error)throw error;return data}
 const userPreferences=()=>({customerSort,orderSort,invoiceSort,receiptSort,financeMonth,appointmentView,appointmentMonth,listColumns});
 function normalizeListColumns(value){const defaults=defaultListColumns(),output={};for(const [view,allowed] of Object.entries(LIST_COLUMN_OPTIONS)){const requested=Array.isArray(value?.[view])?value[view]:defaults[view],valid=[...new Set(requested.filter(id=>allowed.some(([allowedId])=>allowedId===id)))];output[view]=valid.length?valid:defaults[view]}return output}
 async function loadUserPreferences(){const {data:{user}}=await supabaseClient.auth.getUser();if(!user)return;preferencesUserId=user.id;const {data,error}=await supabaseClient.from('user_preferences').select('preferences').eq('user_id',user.id).maybeSingle();if(error){console.warn('Persönliche Einstellungen konnten nicht geladen werden:',error.message);return}const value=data?.preferences||{};if(['number-asc','number-desc','name-asc','name-desc'].includes(value.customerSort))customerSort=value.customerSort;if(['number-asc','number-desc','customer-asc','customer-desc','fulfilment-asc','fulfilment-desc','date-asc','date-desc','status-asc','status-desc'].includes(value.orderSort))orderSort=value.orderSort;if(['number-asc','number-desc','issued-asc','issued-desc','customer-asc','customer-desc','due-asc','due-desc','status-asc','status-desc'].includes(value.invoiceSort))invoiceSort=value.invoiceSort;if(['number-asc','number-desc','date-asc','date-desc','customer-asc','customer-desc','invoice-asc','invoice-desc'].includes(value.receiptSort))receiptSort=value.receiptSort;if(['list','calendar'].includes(value.appointmentView))appointmentView=value.appointmentView;if(/^\d{4}-\d{2}$/.test(value.financeMonth||''))financeMonth=value.financeMonth;if(/^\d{4}-\d{2}$/.test(value.appointmentMonth||''))appointmentMonth=value.appointmentMonth;listColumns=normalizeListColumns(value.listColumns)}
@@ -816,13 +815,6 @@ function openPositionTemplates(){
   $('#cancel-position-templates').onclick=async()=>{await closeModal();renderCloudSettings()};
   $('#position-template-form').onsubmit=async event=>{event.preventDefault();if(templates.some(template=>!String(template.name||'').trim())){alert('Bitte gib jeder Vorlage eine Bezeichnung.');return}state.settings.positionTemplates=templates.map(template=>({...template,name:String(template.name).trim(),price:Number(template.price)||0,active:template.active!==false}));try{await saveSettingsRecord(state.settings);await closeModal();renderCloudSettings();notice('Positionsvorlagen gespeichert.')}catch(error){alert(`Vorlagen konnten nicht gespeichert werden: ${error.message}`)}};
 }
-function syncInvoiceFromOrder(order){
-  if(!order?.invoiceId)return;
-  const invoice=state.invoices.find(x=>x.id===order.invoiceId);if(!invoice)return;
-  Object.assign(invoice,{orderId:order.id,orderNumber:order.number,customerId:order.customerId,customerSnapshot:structuredClone(order.customerSnapshot),items:structuredClone(order.items),total:order.total,dueDate:dueDateFromFulfilment(order.fulfilmentDate),updatedAt:new Date().toISOString()});
-  syncReceiptFromInvoice(invoice);
-}
-
 createInvoice=async function(orderId){
   const order=state.orders.find(x=>x.id===orderId);if(!order||order.invoiceId)return;
   const issued=today(),invoice={id:uid(),number:'',date:issued,dueDate:dueDateFromFulfilment(order.fulfilmentDate),orderId:order.id,orderNumber:order.number,customerId:order.customerId,customerSnapshot:structuredClone(order.customerSnapshot),items:structuredClone(order.items),total:order.total,status:'Offen',paidDate:'',paymentMethod:'',text:state.settings.invoiceText,archived:false,createdAt:new Date().toISOString()};
