@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.95.0';
+const APP_VERSION='TEST V0.0.96.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
@@ -1013,7 +1013,7 @@ render=function(view){
   if(view!=='bookkeeping')return originalRender(view);
   if(activeEditLock?.type==='settings')releaseCurrentEditLock();currentView=view;trackUserPresence(true).catch(()=>{});$('#content').dataset.view=view;$$('#nav button').forEach(button=>button.classList.toggle('active',button.dataset.view===view));$$('[data-mobile-view]').forEach(button=>button.classList.toggle('active',button.dataset.mobileView===view));$('.sidebar').classList.remove('open');renderBookkeeping();
 };
-openMoreMenu=function(){modal('Mehr',`<div class="more-grid">${[['statistics','Statistik'],['customers','Kunden'],['orders','Aufträge'],['invoices','Rechnungen'],['receipts','Quittungen'],['expenses','Ausgaben'],['income','Einnahmen'],['bookkeeping','Buchhaltung'],['settings','Einstellungen'],['trash','Papierkorb']].map(([view,label])=>`<button type="button" class="secondary" data-more-view="${view}">${label}</button>`).join('')}</div>`);$('#modal-body').onclick=event=>{const view=event.target.closest('[data-more-view]')?.dataset.moreView;if(view){closeModal();render(view)}}};
+openMoreMenu=function(){const views=[['dashboard','Übersicht'],['statistics','Statistik'],['appointments','Termine'],['customers','Kunden'],['orders','Aufträge'],['invoices','Rechnungen'],['receipts','Quittungen'],['expenses','Ausgaben'],['income','Einnahmen'],['bookkeeping','Buchhaltung'],['settings','Einstellungen'],['trash','Papierkorb']];modal('Mehr',`<div class="more-grid">${views.map(([view,label])=>`<button type="button" class="secondary" data-more-view="${view}">${label}</button>`).join('')}<button type="button" class="secondary" data-more-action="reload">Neu laden</button><button type="button" class="secondary" data-more-action="lock">Sperren</button></div>`);$('#modal-body').onclick=event=>{const view=event.target.closest('[data-more-view]')?.dataset.moreView,action=event.target.closest('[data-more-action]')?.dataset.moreAction;if(view){closeModal();render(view)}else if(action){closeModal();$(`#${action==='lock'?'lock-button':'reload-button'}`).click()}}};
 Object.assign(window,{customerForm,orderForm,invoiceForm,createInvoice,createReceipt,expenseForm,deleteExpense,pdfMonthlyReport,printDocument,pdfDocument,toggleArchive,exportData,closeModal,reloadCloudData,openPositionTemplates,supplierForm,toggleSupplierArchive,openBookkeepingTab,setPaymentReconciled,downloadAnnualCsv,pdfAnnualReport});
 window.addEventListener('error',event=>logClientError(event.message,{source:event.filename||'',line:event.lineno||0,column:event.colno||0}));
 window.addEventListener('unhandledrejection',event=>logClientError(event.reason?.message||event.reason||'Unbehandelter Promise-Fehler',{type:'unhandledrejection'}));
