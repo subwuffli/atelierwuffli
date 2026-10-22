@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://johkbmlozygtfjsqfkdu.supabase.co';
 const SUPABASE_KEY='sb_publishable_DGpxSu1ppS0fY7nbE75RSg_rI7G8UAb';
-const APP_VERSION='V0.0.99.0';
+const APP_VERSION='V0.0.101.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
@@ -183,8 +183,10 @@ async function qrBillPng(invoice){
   const QRBill=window.SwissQRBill?.svg?.SwissQRBill,qrData=invoice.qrData;
   if(!QRBill)throw new Error('Das QR-Rechnungsmodul wurde nicht geladen. Bitte die Seite neu laden.');
   if(!qrData?.account||!qrData?.creditor)return null;
+  const cacheKey=JSON.stringify([qrData,Number(invoice.total)]);
+  if(qrBillPng.cache?.key===cacheKey)return qrBillPng.cache.png;
   const svg=new QRBill({...qrData,creditor:{...qrData.creditor,account:qrData.account},amount:Number(invoice.total),currency:'CHF'},{language:'DE'}).toString(),blob=new Blob([svg],{type:'image/svg+xml'}),url=URL.createObjectURL(blob);
-  try{return await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>{const canvas=document.createElement('canvas'),scale=6;canvas.width=210*scale;canvas.height=105*scale;const context=canvas.getContext('2d');context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(image,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL('image/png'))};image.onerror=()=>reject(new Error('QR-Zahlteil konnte nicht gerendert werden.'));image.src=url})}finally{URL.revokeObjectURL(url)}
+  try{const png=await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>{const canvas=document.createElement('canvas'),scale=6;canvas.width=210*scale;canvas.height=105*scale;const context=canvas.getContext('2d');context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(image,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL('image/png'))};image.onerror=()=>reject(new Error('QR-Zahlteil konnte nicht gerendert werden.'));image.src=url});qrBillPng.cache={key:cacheKey,png};return png}finally{URL.revokeObjectURL(url)}
 }
 async function appendQrBill(doc,invoice,onCurrentPage=false){const png=await qrBillPng(invoice);if(!png)return;if(!onCurrentPage)doc.addPage();doc.addImage(png,'PNG',0,onCurrentPage?192:0,210,105,undefined,'FAST')}
 async function ensureInvoiceQrData(invoice){
@@ -198,10 +200,10 @@ async function ensureInvoiceQrData(invoice){
   }finally{await releaseCurrentEditLock()}
 }
 async function findGeneratedPdf(type,id,documentHash){const {data,error}=await supabaseClient.from('file_attachments').select('id,file_name').eq('entity_type',type).eq('entity_id',id).eq('source','generated_pdf').eq('document_hash',documentHash).is('deleted_at',null).maybeSingle();if(error)throw error;return data}
-async function openStoredPdf(file){const {data:{session}}=await supabaseClient.auth.getSession();if(!session)throw new Error('Sitzung abgelaufen. Bitte neu anmelden.');const response=await fetch(`${SUPABASE_URL}/functions/v1/file-storage?action=download&fileId=${encodeURIComponent(file.id)}`,{headers:{Authorization:`Bearer ${session.access_token}`,apikey:SUPABASE_KEY}});if(!response.ok)throw new Error('Gespeichertes PDF konnte nicht geöffnet werden.');await deliverPdfBlob(await response.blob(),file.file_name)}
-async function storeGeneratedPdf(type,record,doc,documentHash){
-  const data=new FormData();data.append('entityType',type);data.append('entityId',record.id);data.append('source','generated_pdf');data.append('documentHash',documentHash);data.append('file',new File([doc.output('blob')],`${record.number}.pdf`,{type:'application/pdf'}));
-  for(let attempt=0;attempt<3;attempt++){const {data:saved,error}=await supabaseClient.functions.invoke('file-storage',{body:data});if(!error)return saved;if(!/Failed to send a request to the Edge Function/i.test(error.message)||attempt===2)throw error;await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)))}
+async function openStoredPdf(file){const {data:{session}}=await supabaseClient.auth.getSession();if(!session)throw new Error('Sitzung abgelaufen. Bitte neu anmelden.');const response=await fetch(`${SUPABASE_URL}/functions/v1/file-storage?action=download&fileId=${encodeURIComponent(file.id)}`,{headers:{Authorization:`Bearer ${session.access_token}`,apikey:SUPABASE_KEY}});if(!response.ok){const detail=await response.json().catch(()=>null);throw new Error(detail?.error||'STORED_PDF_UNAVAILABLE')}await deliverPdfBlob(await response.blob(),file.file_name)}
+async function storeGeneratedPdf(type,record,blob,documentHash){
+  const data=new FormData();data.append('entityType',type);data.append('entityId',record.id);data.append('source','generated_pdf');data.append('documentHash',documentHash);data.append('file',new File([blob],`${record.number}.pdf`,{type:'application/pdf'}));
+  for(let attempt=0;attempt<3;attempt++){const {data:saved,error}=await supabaseClient.functions.invoke('file-storage',{body:data});if(!error)return saved;const recovered=await findGeneratedPdf(type,record.id,documentHash).catch(()=>null);if(recovered)return recovered;if(!/Failed to send a request to the Edge Function/i.test(error.message)||attempt===2)throw error;await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)))}
 }
 async function uploadAttachment(type,id,file){const data=new FormData();data.append('entityType',type);data.append('entityId',id);data.append('source','upload');data.append('file',file);const {error}=await supabaseClient.functions.invoke('file-storage',{body:data});if(error){const detail=await error.context?.json?.().catch(()=>null);throw new Error(detail?.detail||detail?.error||detail?.message||error.message)}}
 async function deliverPdfBlob(blob,fileName){
@@ -515,9 +517,9 @@ const incomeDate=i=>i.paidDate||i.receipt?.date||i.date;
 function renderIncome(){setTitle('Einnahmen');const paid=state.invoices.filter(i=>i.status==='Bezahlt'),rows=paid.filter(i=>monthKey(incomeDate(i))===financeMonth).sort((a,b)=>incomeDate(b).localeCompare(incomeDate(a))),total=rows.reduce((s,i)=>s+Number(i.total),0);$('#content').innerHTML=`<div class="section-head"><div class="actions"><label>Monat<input id="finance-month" type="month" value="${financeMonth}"></label><button class="secondary" onclick="pdfMonthlyReport('income','${financeMonth}')">Monatsbericht PDF</button></div></div><div class="grid stats finance-stats"><div class="card stat"><span class="muted">Einnahmen ${monthLabel(financeMonth)}</span><strong>${money(total)}</strong></div><div class="card stat"><span class="muted">Bezahlte Rechnungen</span><strong>${rows.length}</strong></div></div>${financeChart(paid,incomeDate,i=>i.total)}<div class="section-head"><h2>Einnahmen ${monthLabel(financeMonth)}</h2></div>${rows.length?`<div class="table-wrap"><table><thead><tr><th>Zahlungsdatum</th><th>Rechnung</th><th>Kunde</th><th>Betrag</th></tr></thead><tbody>${rows.map(i=>`<tr><td>${date(incomeDate(i))}</td><td>${esc(i.number)}</td><td>${esc(i.customerSnapshot?.name)}</td><td>${money(i.total)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="card empty">Keine Einnahmen in diesem Monat.</div>'}`;$('#finance-month').onchange=e=>{financeMonth=e.target.value;saveUserPreferences();renderIncome()}}
 async function pdfMonthlyReport(kind,month){
   if(!window.jspdf?.jsPDF){alert('Die PDF-Funktion konnte nicht geladen werden.');return}
-  const isExpense=kind==='expenses',rows=isExpense?state.expenses.filter(x=>monthKey(x.date)===month):state.invoices.filter(i=>i.status==='Bezahlt'&&monthKey(incomeDate(i))===month),total=rows.reduce((sum,x)=>sum+Number(isExpense?x.amount:x.total),0),{jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4'}),s=state.settings,rose=[247,243,241],roseStrong=[205,198,194],ink=[54,47,52],muted=[105,86,94];
+  const isExpense=kind==='expenses',rows=isExpense?state.expenses.filter(x=>monthKey(x.date)===month):state.invoices.filter(i=>i.status==='Bezahlt'&&monthKey(incomeDate(i))===month),total=rows.reduce((sum,x)=>sum+Number(isExpense?x.amount:x.total),0),{jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4',compress:true}),s=state.settings,rose=[247,243,241],roseStrong=[205,198,194],ink=[54,47,52],muted=[105,86,94];
   const decorate=()=>{doc.setFillColor(255,255,255);doc.rect(0,0,210,297,'F')};
-  const addLogo=async()=>{if(!s.logo)return;try{doc.addImage(await preparePdfLogo(s.logo),'PNG',151,12,42,42,'report-logo','FAST')}catch(error){console.warn('Logo konnte nicht ins PDF eingefügt werden:',error)}};
+  const addLogo=async()=>{if(!s.logo)return;try{doc.addImage(await preparePdfLogo(s.logo),'JPEG',151,12,42,42,'report-logo','FAST')}catch(error){console.warn('Logo konnte nicht ins PDF eingefügt werden:',error)}};
   decorate();await addLogo();doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(...muted);doc.text(doc.splitTextToSize([businessName(s),businessAddress(s)].filter(Boolean).join(' · '),105),20,25);doc.setFontSize(10);doc.text(monthLabel(month),190,62,{align:'right'});doc.text(`Erstellt am ${date(today())}`,190,69,{align:'right'});doc.setTextColor(...ink);doc.setFont('times','italic');doc.setFontSize(28);doc.text(isExpense?'Ausgaben':'Einnahmen',20,103);
   let y=142;doc.setFillColor(...rose);doc.roundedRect(15,y,180,10,2,2,'F');doc.setTextColor(...ink);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Datum',20,y+6.5);doc.text(isExpense?'Beschreibung':'Rechnung / Kunde',48,y+6.5);doc.text('Betrag',190,y+6.5,{align:'right'});y+=12;doc.setFont('helvetica','normal');
   for(const x of rows){const description=isExpense?String(x.description||''):`${x.number}  ${x.customerSnapshot?.name||''}`,parts=doc.splitTextToSize(description,115),height=Math.max(9,parts.length*4.5+3);if(y+height>255){doc.addPage();decorate();y=24}doc.text(date(isExpense?x.date:incomeDate(x)),20,y+4);doc.text(parts,48,y+4);doc.text(money(isExpense?x.amount:x.total),190,y+4,{align:'right'});doc.setDrawColor(222,217,214);doc.line(15,y+height,195,y+height);y+=height}
@@ -816,22 +818,24 @@ exportData=async function(){
 
 async function preparePdfLogo(source){
   if(!source)return '';
+  if(preparePdfLogo.cache?.source===source)return preparePdfLogo.cache.data;
   const data=source.startsWith('data:')?source:await fetch(source).then(response=>response.blob()).then(blob=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(blob)}));
-  return new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>{const pad=Math.round(Math.min(image.width,image.height)*.12),fade=Math.max(8,Math.round(pad*.85)),canvas=document.createElement('canvas');canvas.width=image.width+pad*2;canvas.height=image.height+pad*2;const context=canvas.getContext('2d');context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(image,pad,pad);const edges=[[pad,pad,fade,image.height,0,0,fade,0],[pad+image.width-fade,pad,fade,image.height,fade,0,0,0],[pad,pad,image.width,fade,0,0,0,fade],[pad,pad+image.height-fade,image.width,fade,0,fade,0,0]];for(const [x,y,w,h,x0,y0,x1,y1] of edges){const gradient=context.createLinearGradient(x+x0,y+y0,x+x1,y+y1);gradient.addColorStop(0,'rgba(255,255,255,1)');gradient.addColorStop(1,'rgba(255,255,255,0)');context.fillStyle=gradient;context.fillRect(x,y,w,h)}resolve(canvas.toDataURL('image/png'))};image.onerror=reject;image.src=data});
+  const prepared=await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>{const pad=Math.round(Math.min(image.width,image.height)*.12),fade=Math.max(8,Math.round(pad*.85)),width=image.width+pad*2,height=image.height+pad*2,scale=Math.min(1,800/Math.max(width,height)),canvas=document.createElement('canvas');canvas.width=Math.round(width*scale);canvas.height=Math.round(height*scale);const context=canvas.getContext('2d');context.scale(scale,scale);context.fillStyle='#fff';context.fillRect(0,0,width,height);context.drawImage(image,pad,pad);const edges=[[pad,pad,fade,image.height,0,0,fade,0],[pad+image.width-fade,pad,fade,image.height,fade,0,0,0],[pad,pad,image.width,fade,0,0,0,fade],[pad,pad+image.height-fade,image.width,fade,0,fade,0,0]];for(const [x,y,w,h,x0,y0,x1,y1] of edges){const gradient=context.createLinearGradient(x+x0,y+y0,x+x1,y+y1);gradient.addColorStop(0,'rgba(255,255,255,1)');gradient.addColorStop(1,'rgba(255,255,255,0)');context.fillStyle=gradient;context.fillRect(x,y,w,h)}resolve(canvas.toDataURL('image/jpeg',.85))};image.onerror=reject;image.src=data});preparePdfLogo.cache={source,data:prepared};return prepared;
 }
 
 async function pdfDocument(type,id){
   let invoice=state.invoices.find(x=>x.id===id),d=type==='order'?state.orders.find(x=>x.id===id):type==='receipt'?invoice?.receipt:invoice;if(!d)return;
-  const done=showWorking('PDF wird erstellt und gespeichert …');try{
+  const done=showWorking('PDF wird erstellt und gespeichert …'),started=performance.now(),timings={};let restoreMissingPdf=false;try{
   if(type==='invoice'){invoice=await ensureInvoiceQrData(invoice);d=invoice}
-  const documentHash=await pdfHash(type,d),existingPdf=await findGeneratedPdf(type,d.id,documentHash);if(existingPdf){try{await openStoredPdf(existingPdf);return}catch(error){console.warn('Gespeichertes PDF fehlt, es wird neu erzeugt.',error)}}
+  let phase=performance.now(),documentHash=await pdfHash(type,d),existingPdf=await findGeneratedPdf(type,d.id,documentHash);timings.lookup=performance.now()-phase;if(existingPdf){try{phase=performance.now();await openStoredPdf(existingPdf);timings.open=performance.now()-phase;console.debug('[PDF timing]',{type,...timings,total:performance.now()-started});return}catch(error){if(error.message!=='MISSING_FILE')throw error;restoreMissingPdf=true;console.warn('Gespeichertes PDF fehlt, es wird neu erzeugt.',error)}}
   if(!window.jspdf?.jsPDF){alert('Die PDF-Funktion konnte nicht geladen werden. Bitte Internetverbindung prüfen und die Seite neu laden.');return}
-  const {jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4'}),s=state.settings,isInv=type==='invoice',isReceipt=type==='receipt';
+  const {jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4',compress:true}),s=state.settings,isInv=type==='invoice',isReceipt=type==='receipt';
+  phase=performance.now();
   const pdfText=doc.text.bind(doc);doc.text=(text,...args)=>pdfText(text==='Liebe Kundin, lieber Kunde,'?customerGreeting(d):text,...args);
   {
     const rose=[247,243,241],roseStrong=[205,198,194],ink=[54,47,52],muted=[105,86,94];
     const decorate=()=>{doc.setFillColor(255,255,255);doc.rect(0,0,210,297,'F')};
-    const addLogo=async()=>{if(!s.logo)return;try{doc.addImage(await preparePdfLogo(s.logo),'PNG',151,12,42,42,'logo','FAST')}catch(error){console.warn('Logo konnte nicht ins PDF eingefügt werden:',error)}};
+    const addLogo=async()=>{if(!s.logo)return;try{doc.addImage(await preparePdfLogo(s.logo),'JPEG',151,12,42,42,'logo','FAST')}catch(error){console.warn('Logo konnte nicht ins PDF eingefügt werden:',error)}};
     decorate();await addLogo();doc.setTextColor(...ink);
     const customer=[d.customerSnapshot?.name,d.customerSnapshot?.billing?.street,[d.customerSnapshot?.billing?.zip,d.customerSnapshot?.billing?.city].filter(Boolean).join(' ')].filter(Boolean),title=isReceipt?'Quittung':isInv?'Rechnung':'Auftrag';
     doc.setTextColor(...ink);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text(isReceipt?'Quittung für':'Rechnungsempfänger',20,36);doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text(customer.map(String),20,43);
@@ -847,10 +851,10 @@ async function pdfDocument(type,id){
     else if(!isInv){doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Auftragsinformationen',20,225);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);const info=[...companyLines,`${d.fulfilment||'Erfüllung'} am ${date(d.fulfilmentDate)}`];if(d.text)info.push(...doc.splitTextToSize(String(d.text),75));info.forEach((line,index)=>doc.text(line,20,233+index*4.5))}
     if(!isInv&&!qrOnCurrentPage){doc.setTextColor(...ink);doc.setFont('times','italic');doc.setFontSize(isReceipt?24:20);doc.text('Vielen Dank!',105,270,{align:'center'})}
     if(isInv)await appendQrBill(doc,d,qrOnCurrentPage);
-    const saved=await storeGeneratedPdf(type,d,doc,documentHash);await openStoredPdf(saved);return;
+    timings.render=performance.now()-phase;const blob=doc.output('blob');phase=performance.now();const saved=await storeGeneratedPdf(type,d,blob,documentHash);timings.upload=performance.now()-phase;phase=performance.now();await deliverPdfBlob(blob,saved.file_name);timings.open=performance.now()-phase;console.debug('[PDF timing]',{type,...timings,total:performance.now()-started});return;
   }
   let y=18;
-  if(s.logo){try{const logoData=s.logo.startsWith('data:')?s.logo:await fetch(s.logo).then(r=>r.blob()).then(blob=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(blob)}));doc.addImage(logoData,undefined,15,y,34,34,'logo','FAST')}catch(error){console.warn('Logo konnte nicht ins PDF eingefügt werden:',error)}}
+  if(s.logo){try{doc.addImage(await preparePdfLogo(s.logo),'JPEG',15,y,34,34,'logo','FAST')}catch(error){console.warn('Logo konnte nicht ins PDF eingefügt werden:',error)}}
   doc.setFontSize(10);doc.text(String(s.name||'Atelier Wuffli'),55,y+5);doc.text(doc.splitTextToSize(String(s.address||''),65),55,y+11);
   doc.text(String(d.customerSnapshot?.name||''),135,y+5);doc.text(String(d.customerSnapshot?.billing?.street||''),135,y+11);doc.text(`${d.customerSnapshot?.billing?.zip||''} ${d.customerSnapshot?.billing?.city||''}`.trim(),135,y+17);
   y=62;doc.setFontSize(20);doc.text(`${isReceipt?'Quittung':isInv?'Rechnung':'Auftrag'} ${d.number}`,15,y);y+=9;doc.setFontSize(10);doc.text(`Datum: ${date(d.date)}`,15,y);
@@ -860,8 +864,9 @@ async function pdfDocument(type,id){
   y+=5;doc.setFontSize(13);doc.text(`Gesamtbetrag: ${money(d.total)}`,193,y,{align:'right'});y+=12;doc.setFontSize(10);
   if(d.text){doc.text(doc.splitTextToSize(String(d.text),175),15,y);y+=15}
   if(isReceipt){doc.setFontSize(12);doc.text('Der Rechnungsbetrag wurde vollständig bezahlt.',15,y);doc.setFontSize(10);doc.text(`Rechnung: ${d.invoiceNumber}`,15,y+8)}else if(isInv){doc.text(`Zahlbar bis ${date(d.dueDate)}`,15,y);doc.text(`IBAN: ${s.iban||''}`,15,y+6);doc.text(`Referenz: ${d.number}`,15,y+12)}
-  const saved=await storeGeneratedPdf(type,d,doc,documentHash);await openStoredPdf(saved);
-  }catch(error){console.error('PDF konnte nicht erstellt werden:',error);alert(`PDF konnte nicht erstellt werden: ${error.message||'Unbekannter Fehler'}`)}finally{done()}
+  if(isInv)await appendQrBill(doc,d);
+  timings.render=performance.now()-phase;const blob=doc.output('blob');phase=performance.now();const saved=await storeGeneratedPdf(type,d,blob,documentHash);timings.upload=performance.now()-phase;phase=performance.now();await deliverPdfBlob(blob,saved.file_name);timings.open=performance.now()-phase;console.debug('[PDF timing]',{type,...timings,total:performance.now()-started});
+  }catch(error){console.error('PDF konnte nicht erstellt werden:',error);alert(`${restoreMissingPdf?'Gespeichertes PDF fehlt und konnte nicht neu erstellt werden':'PDF konnte nicht erstellt werden'}: ${error.message||'Unbekannter Fehler'}`)}finally{done()}
 }
 printDocument=async function(type,id){
   const invoice=state.invoices.find(x=>x.id===id),d=type==='order'?state.orders.find(x=>x.id===id):type==='receipt'?invoice?.receipt:invoice;if(!d)return;
@@ -972,7 +977,7 @@ function downloadCsv(file,headers,rows){const body=[headers,...rows].map(row=>ro
 function downloadAnnualCsv(){const data=annualReportData(),rows=[...data.income.map(invoice=>['Einnahme',incomeDate(invoice),invoice.number,invoice.customerSnapshot?.name||'',paymentLabel(invoice.paymentMethod),invoice.total]),...data.expenses.map(expense=>['Ausgabe',expense.paidDate||expense.date,expense.number||'',supplierName(expense),expense.category||'Sonstiges',-expenseBusinessAmount(expense)])];downloadCsv(`buchhaltung-${financeYear}.csv`,['Art','Datum','Beleg','Partner','Kategorie / Zahlungsart','Geschäftsbetrag CHF'],rows);notice('Jahresauswertung als CSV exportiert.')}
 async function pdfAnnualReport(){
   if(!window.jspdf?.jsPDF){alert('Die PDF-Funktion konnte nicht geladen werden.');return}
-  const data=annualReportData(),incomeTotal=data.income.reduce((sum,invoice)=>sum+Number(invoice.total||0),0),{jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4'});let y=22;
+  const data=annualReportData(),incomeTotal=data.income.reduce((sum,invoice)=>sum+Number(invoice.total||0),0),{jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4',compress:true});let y=22;
   doc.setFontSize(20);doc.text(`Jahresauswertung ${financeYear}`,20,y);y+=12;doc.setFontSize(10);[['Einnahmen',incomeTotal],['Geschäftsausgaben',data.businessExpenses],['Ergebnis vor Steuern',incomeTotal-data.businessExpenses]].forEach(([label,value])=>{doc.text(label,20,y);doc.text(money(value),190,y,{align:'right'});y+=7});y+=6;doc.setFontSize(13);doc.text('Umsatz nach Zahlungsart',20,y);y+=8;doc.setFontSize(10);for(const [method,total] of [...data.payments.entries()].sort(([a],[b])=>a.localeCompare(b,'de'))){doc.text(method,20,y);doc.text(money(total),190,y,{align:'right'});y+=6}y+=6;doc.setFontSize(13);doc.text('Offene Posten',20,y);y+=8;doc.setFontSize(10);doc.text(`Kundenrechnungen: ${money(data.openCustomers.reduce((sum,invoice)=>sum+Number(invoice.total||0),0))}`,20,y);y+=6;doc.text(`Lieferantenrechnungen: ${money(data.openSuppliers.reduce((sum,expense)=>sum+Number(expense.amount||0),0))}`,20,y);await deliverPdf(doc,`Jahresauswertung-${financeYear}.pdf`);
 }
 
