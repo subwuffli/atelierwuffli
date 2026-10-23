@@ -24,8 +24,32 @@ async function storageNames(type:keyof typeof allowed,id:string,admin:ReturnType
   if(type==="receipt"){const {data:invoice}=await admin.from("invoices").select("order_number").eq("id",document?.invoice_id||"").maybeSingle();folder=invoice?.order_number||document?.invoice_number||folder}
   return {root:"auftraege",folder:clean(folder),number:clean(document?.number||id)};
 }
+async function moveGeneratedPdfsToBackup(entityType:string,entityId:string,admin:ReturnType<typeof createClient>){
+  const {data:older,error:olderError}=await admin.from("file_attachments").select("id,storage_key").eq("entity_type",entityType).eq("entity_id",entityId).eq("source","generated_pdf").is("deleted_at",null);
+  if(olderError)throw olderError;
+  for(const old of older||[]){
+    if(old.storage_key.includes("/Backup/"))continue;
+    try{await r2.send(new HeadObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:old.storage_key}))}catch(error){
+      if(!isMissingObject(error))throw new Error("BACKUP_MOVE_FAILED",{cause:error});
+      const {error:markError}=await admin.from("file_attachments").update({deleted_at:new Date().toISOString(),delete_reason:"R2-Objekt fehlt"}).eq("id",old.id);
+      if(markError)throw new Error("BACKUP_MOVE_FAILED",{cause:markError});
+      continue;
+    }
+    const backupKey=`${old.storage_key.slice(0,old.storage_key.lastIndexOf("/")+1)}Backup/${old.storage_key.slice(old.storage_key.lastIndexOf("/")+1)}`;
+    try{
+      await r2.send(new CopyObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:backupKey,CopySource:`${Deno.env.get("R2_BUCKET")}/${old.storage_key}`}));
+      const {error:moveError}=await admin.from("file_attachments").update({storage_key:backupKey}).eq("id",old.id);
+      if(moveError)throw moveError;
+      const removed=await r2.send(new DeleteObjectsCommand({Bucket:Deno.env.get("R2_BUCKET"),Delete:{Objects:[{Key:old.storage_key}]}}));
+      if(removed.Errors?.length)throw new Error("BACKUP_SOURCE_NOT_REMOVED");
+    }catch(error){
+      await admin.from("file_attachments").update({storage_key:old.storage_key}).eq("id",old.id);
+      throw new Error("BACKUP_MOVE_FAILED",{cause:error});
+    }
+  }
+}
 
-Deno.serve(async req=>{
+Deno.serve(async req=>{let uploadedKey="";try{
   const origin=req.headers.get("Origin")||"";
   if(req.method==="OPTIONS")return response(req,null,204);
   if(origin&&!allowedOrigins.has(origin))return response(req,JSON.stringify({error:"ORIGIN_NOT_ALLOWED"}),403,{"Content-Type":"application/json"});
@@ -56,9 +80,16 @@ Deno.serve(async req=>{
   if(documentHash){const {data:existing}=await admin.from("file_attachments").select("id,file_name,created_at,version,storage_key").eq("entity_type",entityType).eq("entity_id",entityId).eq("source",source).eq("document_hash",documentHash).is("deleted_at",null).maybeSingle();if(existing){try{await r2.send(new HeadObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:existing.storage_key}));return response(req,JSON.stringify({...existing,existing:true}),200,{"Content-Type":"application/json"})}catch(error){if(!isMissingObject(error))throw error;const {error:markError}=await admin.from("file_attachments").update({deleted_at:new Date().toISOString(),delete_reason:"R2-Objekt fehlt"}).eq("id",existing.id);if(markError)throw markError}}}
   const version=source==="generated_pdf"?(await admin.from("file_attachments").select("id",{count:"exact",head:true}).eq("entity_type",entityType).eq("entity_id",entityId).eq("source",source)).count!+1:null;
   const names=await storageNames(entityType as keyof typeof allowed,entityId,admin),safe=clean(file.name),parts=names.number.split('-'),year=`20${parts[1]||'00'}`,month=parts[2]||'00',suffix=entityType==="expense"&&source==="upload"?(safe.match(/\.[^.]+$/)?.[0]||""):(safe.startsWith(`${names.number}.`)?safe.slice(names.number.length):`-${safe}`),storedName=entityType==="expense"&&source==="upload"?`${names.number}${suffix}`:file.name,key=`${storagePrefix?`${storagePrefix}/`:""}${names.root}/${year}/${month}/${names.folder}/${names.number}-${crypto.randomUUID()}${suffix}`;
+  uploadedKey=key;
   await r2.send(new PutObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:key,Body:bytes,ContentType:file.type}));
+  if(source==="generated_pdf")await moveGeneratedPdfsToBackup(entityType,entityId,admin);
   const {data:saved,error}=await admin.from("file_attachments").insert({entity_type:entityType,entity_id:entityId,file_name:storedName,content_type:file.type,byte_size:file.size,storage_key:key,source,version,document_hash:documentHash,created_by:user.id}).select("id,file_name,created_at,version").single();
   if(error)throw error;
-  if(source==="generated_pdf"){const {data:older,error:olderError}=await admin.from("file_attachments").select("id,file_name,storage_key").eq("entity_type",entityType).eq("entity_id",entityId).eq("source",source).neq("id",saved.id).is("deleted_at",null);if(olderError)throw olderError;for(const old of older||[]){if(old.storage_key.includes("/Backup/"))continue;try{await r2.send(new HeadObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:old.storage_key}))}catch{await admin.from("file_attachments").update({deleted_at:new Date().toISOString()}).eq("id",old.id);continue}const backupKey=`${old.storage_key.slice(0,old.storage_key.lastIndexOf("/")+1)}Backup/${old.storage_key.slice(old.storage_key.lastIndexOf("/")+1)}`;await r2.send(new CopyObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:backupKey,CopySource:`${Deno.env.get("R2_BUCKET")}/${old.storage_key}`}));const {error:moveError}=await admin.from("file_attachments").update({storage_key:backupKey}).eq("id",old.id);if(moveError)throw moveError;const removed=await r2.send(new DeleteObjectsCommand({Bucket:Deno.env.get("R2_BUCKET"),Delete:{Objects:[{Key:old.storage_key}]}}));if(removed.Errors?.length)throw new Error("BACKUP_SOURCE_NOT_REMOVED")}}
   return response(req,JSON.stringify(saved),201,{"Content-Type":"application/json"});
+  }catch(error){
+    if(uploadedKey)try{await r2.send(new DeleteObjectsCommand({Bucket:Deno.env.get("R2_BUCKET"),Delete:{Objects:[{Key:uploadedKey}]}}))}catch(cleanupError){console.error("Neues R2-Objekt konnte nicht bereinigt werden",cleanupError)}
+    console.error("File storage request failed",error);
+    const code=error instanceof Error&&error.message==="BACKUP_MOVE_FAILED"?"BACKUP_MOVE_FAILED":"FILE_STORAGE_FAILED";
+    return response(req,JSON.stringify({error:code}),500,{"Content-Type":"application/json"});
+  }
 });
