@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.105.0';
+const APP_VERSION='TEST V0.0.106.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
@@ -200,7 +200,7 @@ async function ensureInvoiceQrData(invoice){
   }finally{await releaseCurrentEditLock()}
 }
 async function findGeneratedPdf(type,id,documentHash){const {data,error}=await supabaseClient.from('file_attachments').select('id,file_name').eq('entity_type',type).eq('entity_id',id).eq('source','generated_pdf').eq('document_hash',documentHash).is('deleted_at',null).maybeSingle();if(error)throw error;return data}
-async function recoverGeneratedPdf(type,record,documentHash,byteSize){const {data,error}=await supabaseClient.rpc('recover_generated_pdf_v1',{p_entity_type:type,p_entity_id:record.id,p_document_hash:documentHash,p_byte_size:byteSize});if(error)throw new Error(error.message);return data}
+async function recoverGeneratedPdf(type,record,documentHash,byteSize){const {data,error}=await supabaseClient.rpc('recover_generated_pdf_v1',{p_entity_type:type,p_entity_id:record.id,p_document_hash:documentHash,p_byte_size:byteSize});if(error)throw new Error(error.message);if(!Array.isArray(data)||!data[0])throw new Error('PDF_RECOVERY_FAILED');return data[0]}
 async function openStoredPdf(file){const {data:{session}}=await supabaseClient.auth.getSession();if(!session)throw new Error('Sitzung abgelaufen. Bitte neu anmelden.');const response=await fetch(`${SUPABASE_URL}/functions/v1/file-storage?action=download&fileId=${encodeURIComponent(file.id)}`,{headers:{Authorization:`Bearer ${session.access_token}`,apikey:SUPABASE_KEY}});if(!response.ok){const detail=await response.json().catch(()=>null);throw new Error(detail?.error||'STORED_PDF_UNAVAILABLE')}await deliverPdfBlob(await response.blob(),file.file_name)}
 async function storeGeneratedPdf(type,record,blob,documentHash){
   const data=new FormData();data.append('entityType',type);data.append('entityId',record.id);data.append('source','generated_pdf');data.append('documentHash',documentHash);data.append('file',new File([blob],`${record.number}.pdf`,{type:'application/pdf'}));

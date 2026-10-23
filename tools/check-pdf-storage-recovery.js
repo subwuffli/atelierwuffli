@@ -8,5 +8,6 @@ assert.match(recovery,/security definer/,'Die Datenbank-Wiederherstellung ist ni
 assert.match(recovery,/is_erp_member_v1\(\)/,'Die Datenbank-Wiederherstellung erfordert keine ERP-Mitgliedschaft');
 assert.match(recovery,/Automatische PDF-Wiederherstellung während Speicherstörung/,'Die Datenbank-Wiederherstellung blendet eine ältere PDF bei einer Speicherstörung nicht nachvollziehbar aus');
 assert.match(app,/rpc\('recover_generated_pdf_v1'/,'Der Browser registriert eine bereits hochgeladene PDF nicht über den sicheren Datenbankweg');
+assert.match(app,/Array\.isArray\(data\)\|\|!data\[0\]/,'Der Browser verarbeitet die Tabellenzeile der PDF-Wiederherstellung nicht sicher');
 assert(app.indexOf("if(!/Failed to send a request to the Edge Function/i.test(error.message))")<app.indexOf('const recovered=await findGeneratedPdf'),'Ein Serverfehler wird vor der Wiederherstellungsprüfung nicht zuverlässig angezeigt');
 console.log('PDF-Speicher-Wiederherstellung ist gegen fehlende R2-Dateien und Backup-Fehler abgesichert.');
