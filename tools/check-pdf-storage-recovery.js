@@ -9,5 +9,6 @@ assert.match(recovery,/is_erp_member_v1\(\)/,'Die Datenbank-Wiederherstellung er
 assert.match(recovery,/Automatische PDF-Wiederherstellung während Speicherstörung/,'Die Datenbank-Wiederherstellung blendet eine ältere PDF bei einer Speicherstörung nicht nachvollziehbar aus');
 assert.match(app,/rpc\('recover_generated_pdf_v1'/,'Der Browser registriert eine bereits hochgeladene PDF nicht über den sicheren Datenbankweg');
 assert.match(app,/Array\.isArray\(data\)\|\|!data\[0\]/,'Der Browser verarbeitet die Tabellenzeile der PDF-Wiederherstellung nicht sicher');
-assert(app.indexOf("if(!/Failed to send a request to the Edge Function/i.test(error.message))")<app.indexOf('const recovered=await findGeneratedPdf'),'Ein Serverfehler wird vor der Wiederherstellungsprüfung nicht zuverlässig angezeigt');
+assert.match(app,/detail\?\.error==='FILE_STORAGE_FAILED'/,'Ein nach dem R2-Upload fehlgeschlagener Speichervorgang wird nicht wiederhergestellt');
+assert(app.indexOf('const recovered=await findGeneratedPdf')>app.indexOf('recoverable='),'Ein Serverfehler wird vor der Wiederherstellungsprüfung nicht zuverlässig eingeordnet');
 console.log('PDF-Speicher-Wiederherstellung ist gegen fehlende R2-Dateien und Backup-Fehler abgesichert.');
