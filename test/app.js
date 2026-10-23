@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.107.0';
+const APP_VERSION='TEST V0.0.108.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
@@ -201,7 +201,8 @@ async function ensureInvoiceQrData(invoice){
 }
 async function findGeneratedPdf(type,id,documentHash){const {data,error}=await supabaseClient.from('file_attachments').select('id,file_name').eq('entity_type',type).eq('entity_id',id).eq('source','generated_pdf').eq('document_hash',documentHash).is('deleted_at',null).maybeSingle();if(error)throw error;return data}
 async function recoverGeneratedPdf(type,record,documentHash,byteSize){const {data,error}=await supabaseClient.rpc('recover_generated_pdf_v1',{p_entity_type:type,p_entity_id:record.id,p_document_hash:documentHash,p_byte_size:byteSize});if(error)throw new Error(error.message);if(!Array.isArray(data)||!data[0])throw new Error('PDF_RECOVERY_FAILED');return data[0]}
-async function openStoredPdf(file){const {data:{session}}=await supabaseClient.auth.getSession();if(!session)throw new Error('Sitzung abgelaufen. Bitte neu anmelden.');const response=await fetch(`${SUPABASE_URL}/functions/v1/file-storage?action=download&fileId=${encodeURIComponent(file.id)}`,{headers:{Authorization:`Bearer ${session.access_token}`,apikey:SUPABASE_KEY}});if(!response.ok){const detail=await response.json().catch(()=>null);throw new Error(detail?.error||'STORED_PDF_UNAVAILABLE')}await deliverPdfBlob(await response.blob(),file.file_name)}
+const pdfBlobCache=new Map(),pdfCacheKey=(type,id,documentHash)=>`${type}:${id}:${documentHash}`;
+async function openStoredPdf(file,cacheKey){const {data:{session}}=await supabaseClient.auth.getSession();if(!session)throw new Error('Sitzung abgelaufen. Bitte neu anmelden.');const response=await fetch(`${SUPABASE_URL}/functions/v1/file-storage?action=download&fileId=${encodeURIComponent(file.id)}`,{headers:{Authorization:`Bearer ${session.access_token}`,apikey:SUPABASE_KEY}});if(!response.ok){const detail=await response.json().catch(()=>null);throw new Error(detail?.error||'STORED_PDF_UNAVAILABLE')}const blob=await response.blob();pdfBlobCache.set(cacheKey,blob);await deliverPdfBlob(blob,file.file_name)}
 async function storeGeneratedPdf(type,record,blob,documentHash){
   const data=new FormData();data.append('entityType',type);data.append('entityId',record.id);data.append('source','generated_pdf');data.append('documentHash',documentHash);data.append('file',new File([blob],`${record.number}.pdf`,{type:'application/pdf'}));
   for(let attempt=0;attempt<3;attempt++){const {data:saved,error}=await supabaseClient.functions.invoke('file-storage',{body:data});if(!error)return saved;const detail=await error.context?.json?.().catch(()=>null),recoverable=/Failed to send a request to the Edge Function/i.test(error.message)||detail?.error==='FILE_STORAGE_FAILED';if(!recoverable)throw new Error(detail?.error==='BACKUP_MOVE_FAILED'?'Die vorherige PDF konnte nicht ins Backup verschoben werden. Bitte erneut versuchen.':detail?.error||error.message);const recovered=await findGeneratedPdf(type,record.id,documentHash).catch(()=>null);if(recovered)return recovered;if(attempt===2)return recoverGeneratedPdf(type,record,documentHash,blob.size);await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)))}
@@ -852,7 +853,7 @@ async function pdfDocument(type,id){
   let invoice=state.invoices.find(x=>x.id===id),d=type==='order'?state.orders.find(x=>x.id===id):type==='receipt'?invoice?.receipt:invoice;if(!d)return;
   const done=showWorking('PDF wird erstellt und gespeichert …'),started=performance.now(),timings={};let restoreMissingPdf=false;try{
   if(type==='invoice'){invoice=await ensureInvoiceQrData(invoice);d=invoice}
-  let phase=performance.now(),documentHash=await pdfHash(type,d),existingPdf=await findGeneratedPdf(type,d.id,documentHash);timings.lookup=performance.now()-phase;if(existingPdf){try{phase=performance.now();await openStoredPdf(existingPdf);timings.open=performance.now()-phase;console.debug('[PDF timing]',{type,...timings,total:performance.now()-started});return}catch(error){if(error.message!=='MISSING_FILE')throw error;restoreMissingPdf=true;console.warn('Gespeichertes PDF fehlt, es wird neu erzeugt.',error)}}
+  let phase=performance.now(),documentHash=await pdfHash(type,d),cacheKey=pdfCacheKey(type,d.id,documentHash),existingPdf=await findGeneratedPdf(type,d.id,documentHash);timings.lookup=performance.now()-phase;if(existingPdf){try{phase=performance.now();const cached=pdfBlobCache.get(cacheKey);if(cached)await deliverPdfBlob(cached,existingPdf.file_name);else await openStoredPdf(existingPdf,cacheKey);timings.open=performance.now()-phase;console.debug('[PDF timing]',{type,...timings,total:performance.now()-started});return}catch(error){if(error.message!=='MISSING_FILE')throw error;restoreMissingPdf=true;console.warn('Gespeichertes PDF fehlt, es wird neu erzeugt.',error)}}
   if(!window.jspdf?.jsPDF){alert('Die PDF-Funktion konnte nicht geladen werden. Bitte Internetverbindung prüfen und die Seite neu laden.');return}
   const {jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4',compress:true}),s=state.settings,isInv=type==='invoice',isReceipt=type==='receipt';
   phase=performance.now();
@@ -876,7 +877,7 @@ async function pdfDocument(type,id){
     else if(!isInv){doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Auftragsinformationen',20,225);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);const info=[...companyLines,`${d.fulfilment||'Erfüllung'} am ${date(d.fulfilmentDate)}`];if(d.text)info.push(...doc.splitTextToSize(String(d.text),75));info.forEach((line,index)=>doc.text(line,20,233+index*4.5))}
     if(!isInv&&!qrOnCurrentPage){doc.setTextColor(...ink);doc.setFont('times','italic');doc.setFontSize(isReceipt?24:20);doc.text('Vielen Dank!',105,270,{align:'center'})}
     if(isInv)await appendQrBill(doc,d,qrOnCurrentPage);
-    timings.render=performance.now()-phase;const blob=doc.output('blob');phase=performance.now();const saved=await storeGeneratedPdf(type,d,blob,documentHash);timings.upload=performance.now()-phase;phase=performance.now();await deliverPdfBlob(blob,saved.file_name);timings.open=performance.now()-phase;console.debug('[PDF timing]',{type,...timings,total:performance.now()-started});return;
+    timings.render=performance.now()-phase;const blob=doc.output('blob');pdfBlobCache.set(cacheKey,blob);phase=performance.now();const saved=await storeGeneratedPdf(type,d,blob,documentHash);timings.upload=performance.now()-phase;phase=performance.now();await deliverPdfBlob(blob,saved.file_name);timings.open=performance.now()-phase;console.debug('[PDF timing]',{type,...timings,total:performance.now()-started});return;
   }
   let y=18;
   if(s.logo){try{doc.addImage(await preparePdfLogo(s.logo),'JPEG',15,y,34,34,'logo','FAST')}catch(error){console.warn('Logo konnte nicht ins PDF eingefügt werden:',error)}}
@@ -890,7 +891,7 @@ async function pdfDocument(type,id){
   if(d.text){doc.text(doc.splitTextToSize(String(d.text),175),15,y);y+=15}
   if(isReceipt){doc.setFontSize(12);doc.text('Der Rechnungsbetrag wurde vollständig bezahlt.',15,y);doc.setFontSize(10);doc.text(`Rechnung: ${d.invoiceNumber}`,15,y+8)}else if(isInv){doc.text(`Zahlbar bis ${date(d.dueDate)}`,15,y);doc.text(`IBAN: ${s.iban||''}`,15,y+6);doc.text(`Referenz: ${d.number}`,15,y+12)}
   if(isInv)await appendQrBill(doc,d);
-  timings.render=performance.now()-phase;const blob=doc.output('blob');phase=performance.now();const saved=await storeGeneratedPdf(type,d,blob,documentHash);timings.upload=performance.now()-phase;phase=performance.now();await deliverPdfBlob(blob,saved.file_name);timings.open=performance.now()-phase;console.debug('[PDF timing]',{type,...timings,total:performance.now()-started});
+  timings.render=performance.now()-phase;const blob=doc.output('blob');pdfBlobCache.set(cacheKey,blob);phase=performance.now();const saved=await storeGeneratedPdf(type,d,blob,documentHash);timings.upload=performance.now()-phase;phase=performance.now();await deliverPdfBlob(blob,saved.file_name);timings.open=performance.now()-phase;console.debug('[PDF timing]',{type,...timings,total:performance.now()-started});
   }catch(error){console.error('PDF konnte nicht erstellt werden:',error);alert(`${restoreMissingPdf?'Gespeichertes PDF fehlt und konnte nicht neu erstellt werden':'PDF konnte nicht erstellt werden'}: ${error.message||'Unbekannter Fehler'}`)}finally{done()}
 }
 printDocument=async function(type,id){

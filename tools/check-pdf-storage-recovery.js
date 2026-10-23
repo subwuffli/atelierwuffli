@@ -13,4 +13,6 @@ assert.match(app,/rpc\('recover_generated_pdf_v1'/,'Der Browser registriert eine
 assert.match(app,/Array\.isArray\(data\)\|\|!data\[0\]/,'Der Browser verarbeitet die Tabellenzeile der PDF-Wiederherstellung nicht sicher');
 assert.match(app,/detail\?\.error==='FILE_STORAGE_FAILED'/,'Ein nach dem R2-Upload fehlgeschlagener Speichervorgang wird nicht wiederhergestellt');
 assert(app.indexOf('const recovered=await findGeneratedPdf')>app.indexOf('recoverable='),'Ein Serverfehler wird vor der Wiederherstellungsprüfung nicht zuverlässig eingeordnet');
+assert.match(app,/const pdfBlobCache=new Map\(\),pdfCacheKey=/,'Bereits geöffnete PDFs werden nicht pro Dokumentinhalt zwischengespeichert');
+assert.match(app,/const cached=pdfBlobCache\.get\(cacheKey\);if\(cached\)await deliverPdfBlob/,'Eine bereits erzeugte PDF wird beim erneuten Öffnen nicht direkt verwendet');
 console.log('PDF-Speicher-Wiederherstellung ist gegen fehlende R2-Dateien und Backup-Fehler abgesichert.');
