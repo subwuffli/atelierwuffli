@@ -7,6 +7,8 @@ assert.match(edge,/fileKey=source==="generated_pdf"\?`\$\{names\.number\}-\$\{do
 assert.match(recovery,/security definer/,'Die Datenbank-Wiederherstellung ist nicht gegen direkte Manipulation abgesichert');
 assert.match(recovery,/is_erp_member_v1\(\)/,'Die Datenbank-Wiederherstellung erfordert keine ERP-Mitgliedschaft');
 assert.match(recovery,/Automatische PDF-Wiederherstellung während Speicherstörung/,'Die Datenbank-Wiederherstellung blendet eine ältere PDF bei einer Speicherstörung nicht nachvollziehbar aus');
+assert.match(recovery,/return query update public\.file_attachments f/,'Die Wiederherstellung aktiviert einen passenden ausgeblendeten Speicherpfad nicht wieder');
+assert.match(recovery,/STORAGE_KEY_COLLISION/,'Ein Speicherpfad einer anderen Datei wird bei der Wiederherstellung nicht sicher abgewehrt');
 assert.match(app,/rpc\('recover_generated_pdf_v1'/,'Der Browser registriert eine bereits hochgeladene PDF nicht über den sicheren Datenbankweg');
 assert.match(app,/Array\.isArray\(data\)\|\|!data\[0\]/,'Der Browser verarbeitet die Tabellenzeile der PDF-Wiederherstellung nicht sicher');
 assert.match(app,/detail\?\.error==='FILE_STORAGE_FAILED'/,'Ein nach dem R2-Upload fehlgeschlagener Speichervorgang wird nicht wiederhergestellt');

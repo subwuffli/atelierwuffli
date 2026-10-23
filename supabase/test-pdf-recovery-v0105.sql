@@ -39,6 +39,11 @@ begin
   v_folder:=left(regexp_replace(v_folder,'[^a-zA-Z0-9._-]','_','g'),120);
   v_key:=format('test/%s/20%s/%s/%s/%s-%s.pdf',v_root,split_part(v_number,'-',2),split_part(v_number,'-',3),v_folder,v_number,p_document_hash);
   select count(*)+1 into v_version from public.file_attachments where entity_type=p_entity_type and entity_id=p_entity_id and source='generated_pdf';
+  return query update public.file_attachments f set file_name=v_number||'.pdf',content_type='application/pdf',byte_size=p_byte_size,version=v_version,document_hash=p_document_hash,created_by=auth.uid(),deleted_at=null,deleted_by=null,delete_reason=null
+    where f.storage_key=v_key and f.entity_type=p_entity_type and f.entity_id=p_entity_id and f.source='generated_pdf' and f.deleted_at is not null
+    returning f.id,f.file_name,f.created_at,f.version;
+  if found then return; end if;
+  if exists(select 1 from public.file_attachments f where f.storage_key=v_key) then raise exception 'STORAGE_KEY_COLLISION'; end if;
   return query insert into public.file_attachments(entity_type,entity_id,file_name,content_type,byte_size,storage_key,source,version,document_hash,created_by)
     select p_entity_type,p_entity_id,v_number||'.pdf','application/pdf',p_byte_size,v_key,'generated_pdf',v_version,p_document_hash,auth.uid()
     returning file_attachments.id,file_attachments.file_name,file_attachments.created_at,file_attachments.version;
