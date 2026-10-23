@@ -1,5 +1,5 @@
 -- Test: Registriert nur eine bereits hochgeladene, deterministisch benannte PDF.
--- Eine vorhandene PDF wird nie ersetzt, weil deren R2-Backup den Edge-Function-Weg braucht.
+-- Bei einem Edge-Ausfall bleibt die alte R2-Datei erhalten; nur ihr Datensatz wird ausgeblendet.
 create or replace function public.recover_generated_pdf_v1(
   p_entity_type text,
   p_entity_id uuid,
@@ -32,7 +32,8 @@ begin
 
   return query select f.id,f.file_name,f.created_at,f.version from public.file_attachments f where f.entity_type=p_entity_type and f.entity_id=p_entity_id and f.source='generated_pdf' and f.document_hash=p_document_hash and f.deleted_at is null;
   if found then return; end if;
-  if exists(select 1 from public.file_attachments f where f.entity_type=p_entity_type and f.entity_id=p_entity_id and f.source='generated_pdf' and f.deleted_at is null) then raise exception 'RECOVERY_REQUIRES_FUNCTION'; end if;
+  update public.file_attachments f set deleted_at=clock_timestamp(),deleted_by=auth.uid(),delete_reason='Automatische PDF-Wiederherstellung während Speicherstörung'
+    where f.entity_type=p_entity_type and f.entity_id=p_entity_id and f.source='generated_pdf' and f.deleted_at is null;
 
   v_number:=left(regexp_replace(v_number,'[^a-zA-Z0-9._-]','_','g'),120);
   v_folder:=left(regexp_replace(v_folder,'[^a-zA-Z0-9._-]','_','g'),120);
