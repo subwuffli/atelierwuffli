@@ -19,14 +19,14 @@ begin
   if p_entity_type not in ('order','invoice','receipt','expense') or p_document_hash !~ '^[a-f0-9]{64}$' or p_byte_size < 0 or p_byte_size > 8000000 then raise exception 'INVALID_RECOVERY_REQUEST'; end if;
 
   if p_entity_type='order' then
-    select number,number into v_number,v_folder from public.orders where id=p_entity_id and deleted_at is null;
+    select o.number,o.number into v_number,v_folder from public.orders o where o.id=p_entity_id and o.deleted_at is null;
   elsif p_entity_type='invoice' then
-    select number,coalesce(nullif(order_number,''),number) into v_number,v_folder from public.invoices where id=p_entity_id and deleted_at is null;
+    select i.number,coalesce(nullif(i.order_number,''),i.number) into v_number,v_folder from public.invoices i where i.id=p_entity_id and i.deleted_at is null;
   elsif p_entity_type='receipt' then
     select r.number,coalesce(nullif(i.order_number,''),r.invoice_number,r.number) into v_number,v_folder from public.receipts r left join public.invoices i on i.id=r.invoice_id where r.id=p_entity_id and r.deleted_at is null;
   else
     v_root:='ausgaben';
-    select number,number into v_number,v_folder from public.expenses where id=p_entity_id and deleted_at is null;
+    select e.number,e.number into v_number,v_folder from public.expenses e where e.id=p_entity_id and e.deleted_at is null;
   end if;
   if v_number is null then raise exception 'PARENT_NOT_FOUND'; end if;
 
