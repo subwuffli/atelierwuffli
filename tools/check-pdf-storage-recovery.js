@@ -1,11 +1,12 @@
-const assert=require('node:assert/strict'),fs=require('node:fs'),edge=fs.readFileSync('supabase/functions/file-storage/index.ts','utf8'),app=fs.readFileSync('test/app.js','utf8');
+const assert=require('node:assert/strict'),fs=require('node:fs'),edge=fs.readFileSync('supabase/functions/file-storage/index.ts','utf8'),app=fs.readFileSync('test/app.js','utf8'),recovery=fs.readFileSync('supabase/test-pdf-recovery-v0105.sql','utf8');
 assert.match(edge,/async function moveGeneratedPdfsToBackup/,'Vorherige PDFs werden nicht vor dem neuen Datenbankeintrag verschoben');
 assert.match(edge,/if\(!isMissingObject\(error\)\)throw new Error\("BACKUP_MOVE_FAILED"/,'R2-Ausfälle ausserhalb von 404 werden noch als fehlend behandelt');
 assert.match(edge,/BACKUP_MOVE_FAILED/,'Backup-Fehler werden nicht eindeutig an den Browser gemeldet');
 assert.match(edge,/FILE_STORAGE_FAILED/,'Unerwartete Function-Fehler liefern keine CORS-fähige JSON-Antwort');
 assert.match(edge,/fileKey=source==="generated_pdf"\?`\$\{names\.number\}-\$\{documentHash\}\.pdf`/,'Wiederholte PDF-Erzeugungen verwenden keinen stabilen R2-Schlüssel');
-assert.match(edge,/async function recoverGeneratedPdf/,'Erfolgreich hochgeladene PDFs werden nach einer abgebrochenen Antwort nicht registriert');
-assert.match(edge,/action==="recover-generated"/,'Die Function bietet keine gezielte PDF-Wiederherstellung an');
-assert.match(app,/return recoverGeneratedPdf\(type,record,documentHash\)/,'Der Browser registriert eine bereits hochgeladene PDF nach einem Verbindungsabbruch nicht nachträglich');
+assert.match(recovery,/security definer/,'Die Datenbank-Wiederherstellung ist nicht gegen direkte Manipulation abgesichert');
+assert.match(recovery,/is_erp_member_v1\(\)/,'Die Datenbank-Wiederherstellung erfordert keine ERP-Mitgliedschaft');
+assert.match(recovery,/RECOVERY_REQUIRES_FUNCTION/,'Die Datenbank-Wiederherstellung könnte ältere PDFs ohne Backup ersetzen');
+assert.match(app,/rpc\('recover_generated_pdf_v1'/,'Der Browser registriert eine bereits hochgeladene PDF nicht über den sicheren Datenbankweg');
 assert(app.indexOf("if(!/Failed to send a request to the Edge Function/i.test(error.message))")<app.indexOf('const recovered=await findGeneratedPdf'),'Ein Serverfehler wird vor der Wiederherstellungsprüfung nicht zuverlässig angezeigt');
 console.log('PDF-Speicher-Wiederherstellung ist gegen fehlende R2-Dateien und Backup-Fehler abgesichert.');

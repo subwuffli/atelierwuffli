@@ -48,22 +48,6 @@ async function moveGeneratedPdfsToBackup(entityType:string,entityId:string,admin
     }
   }
 }
-async function recoverGeneratedPdf(req:Request,entityType:string,entityId:string,documentHash:string,userId:string,admin:ReturnType<typeof createClient>){
-  if(!(entityType in allowed)||!entityId||!/^[a-f0-9]{64}$/.test(documentHash))return response(req,JSON.stringify({error:"INVALID_RECOVERY_REQUEST"}),400,{"Content-Type":"application/json"});
-  const {data:parent,error:parentError}=await admin.from(allowed[entityType as keyof typeof allowed]).select("id,deleted_at").eq("id",entityId).maybeSingle();
-  if(parentError)return response(req,JSON.stringify({error:"PARENT_LOOKUP_FAILED",detail:parentError.message}),500,{"Content-Type":"application/json"});
-  if(!parent||parent.deleted_at)return response(req,JSON.stringify({error:"PARENT_NOT_FOUND"}),404,{"Content-Type":"application/json"});
-  const {data:existing}=await admin.from("file_attachments").select("id,file_name,created_at,version,storage_key").eq("entity_type",entityType).eq("entity_id",entityId).eq("source","generated_pdf").eq("document_hash",documentHash).is("deleted_at",null).maybeSingle();
-  if(existing){try{await r2.send(new HeadObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:existing.storage_key}));return response(req,JSON.stringify(existing),200,{"Content-Type":"application/json"})}catch(error){if(!isMissingObject(error))throw error;const {error:markError}=await admin.from("file_attachments").update({deleted_at:new Date().toISOString(),delete_reason:"R2-Objekt fehlt"}).eq("id",existing.id);if(markError)throw markError}}
-  const names=await storageNames(entityType as keyof typeof allowed,entityId,admin),parts=names.number.split('-'),year=`20${parts[1]||'00'}`,month=parts[2]||'00',key=`${storagePrefix?`${storagePrefix}/`:""}${names.root}/${year}/${month}/${names.folder}/${names.number}-${documentHash}.pdf`;
-  let byteSize=0;try{byteSize=Number((await r2.send(new HeadObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:key}))).ContentLength||0)}catch(error){if(isMissingObject(error))return response(req,JSON.stringify({error:"RECOVERY_FILE_MISSING"}),404,{"Content-Type":"application/json"});throw error}
-  await moveGeneratedPdfsToBackup(entityType,entityId,admin);
-  const version=(await admin.from("file_attachments").select("id",{count:"exact",head:true}).eq("entity_type",entityType).eq("entity_id",entityId).eq("source","generated_pdf")).count!+1;
-  const {data:saved,error}=await admin.from("file_attachments").insert({entity_type:entityType,entity_id:entityId,file_name:`${names.number}.pdf`,content_type:"application/pdf",byte_size:byteSize,storage_key:key,source:"generated_pdf",version,document_hash:documentHash,created_by:userId}).select("id,file_name,created_at,version").single();
-  if(error)throw error;
-  return response(req,JSON.stringify(saved),201,{"Content-Type":"application/json"});
-}
-
 Deno.serve(async req=>{let uploadedKey="";try{
   const origin=req.headers.get("Origin")||"";
   if(req.method==="OPTIONS")return response(req,null,204);
@@ -77,7 +61,6 @@ Deno.serve(async req=>{let uploadedKey="";try{
   const admin=createClient(Deno.env.get("SUPABASE_URL")||"",adminKey);
 
   const url=new URL(req.url),action=url.searchParams.get("action");
-  if(action==="recover-generated"){const payload=await req.json().catch(()=>null) as {entityType?:string;entityId?:string;documentHash?:string}|null;return await recoverGeneratedPdf(req,String(payload?.entityType||""),String(payload?.entityId||""),String(payload?.documentHash||""),user.id,admin)}
   if(action==="download"){
     const id=url.searchParams.get("fileId")||"",{data:file}=await admin.from("file_attachments").select("file_name,content_type,storage_key").eq("id",id).is("deleted_at",null).maybeSingle();
     if(!file)return response(req,JSON.stringify({error:"NOT_FOUND"}),404,{"Content-Type":"application/json"});
