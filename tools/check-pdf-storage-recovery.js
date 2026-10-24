@@ -4,6 +4,9 @@ assert.match(edge,/if\(!isMissingObject\(error\)\)throw new Error\("BACKUP_MOVE_
 assert.match(edge,/BACKUP_MOVE_FAILED/,'Backup-Fehler werden nicht eindeutig an den Browser gemeldet');
 assert.match(edge,/FILE_STORAGE_FAILED/,'Unerwartete Function-Fehler liefern keine CORS-fähige JSON-Antwort');
 assert.match(edge,/fileKey=source==="generated_pdf"\?`\$\{names\.number\}-\$\{documentHash\}\.pdf`/,'Wiederholte PDF-Erzeugungen verwenden keinen stabilen R2-Schlüssel');
+assert.match(edge,/select\("id,file_name,created_at,version,storage_key,deleted_at"\)/,'Ausgeblendete PDF-Datensätze werden vor dem erneuten Upload nicht berücksichtigt');
+assert.match(edge,/reuseAttachmentId=existing\.id/,'Eine fehlende PDF verwendet ihren bestehenden Datensatz nicht wieder');
+assert.match(edge,/reuseAttachmentId\?await admin\.from\("file_attachments"\)\.update/,'Ein wiederverwendeter Speicherpfad wird erneut eingefügt statt aktualisiert');
 assert.match(recovery,/security definer/,'Die Datenbank-Wiederherstellung ist nicht gegen direkte Manipulation abgesichert');
 assert.match(recovery,/is_erp_member_v1\(\)/,'Die Datenbank-Wiederherstellung erfordert keine ERP-Mitgliedschaft');
 assert.match(recovery,/Automatische PDF-Wiederherstellung während Speicherstörung/,'Die Datenbank-Wiederherstellung blendet eine ältere PDF bei einer Speicherstörung nicht nachvollziehbar aus');
