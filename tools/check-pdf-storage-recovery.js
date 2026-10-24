@@ -39,6 +39,7 @@ assert.match(app,/progress\.success\(activeStep,'PDF im Dateispeicher speichern'
 assert.match(app,/progress\.fail\(activeStep/,'Ein fehlgeschlagener PDF-Schritt wird nicht markiert');
 assert.match(app,/storageAction\('sign-generated-pdf'/,'Erzeugte PDFs verwenden keinen direkten signierten Upload');
 assert.match(app,/fetch\(signed\.uploadUrl/,'Die PDF wird nicht direkt in R2 hochgeladen');
+assert.match(app,/if\(isMobilePdfDevice\(\)\)return storeGeneratedPdfViaProxy\(type,record,blob,documentHash\)/,'Mobile PDFs umgehen den unzuverlässigen Browser-Upload nicht');
 assert.match(app,/storageAction\('download-url'/,'Gespeicherte PDFs werden nicht direkt von R2 geladen');
 assert.match(app,/PDF_DIRECT_UPLOAD_FAILED/,'Fehler beim direkten PDF-Upload werden nicht protokolliert');
 assert.match(app,/PDF_PROXY_UPLOAD_FAILED/,'Fehler beim Proxy-PDF-Upload werden nicht protokolliert');
