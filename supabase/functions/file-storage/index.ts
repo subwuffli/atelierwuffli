@@ -1,11 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { CopyObjectCommand, DeleteObjectsCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "npm:@aws-sdk/client-s3@3.823.0";
+import { getSignedUrl } from "npm:@aws-sdk/s3-request-presigner@3.823.0";
 
 const allowedOrigins=new Set(["https://subwuffli.github.io"]);
 const allowedFileTypes=new Set(["application/pdf","image/jpeg","image/png","image/webp"]);
 const allowed={order:"orders",invoice:"invoices",receipt:"receipts",expense:"expenses"} as const;
 const r2=new S3Client({region:"auto",endpoint:`https://${Deno.env.get("R2_ACCOUNT_ID")}.r2.cloudflarestorage.com`,responseChecksumValidation:"WHEN_REQUIRED",credentials:{accessKeyId:Deno.env.get("R2_ACCESS_KEY_ID")||"",secretAccessKey:Deno.env.get("R2_SECRET_ACCESS_KEY")||""}});
-const storageFailure=(code:string,cause:unknown)=>new Error(code,{cause}),storageFailureCodes=new Set(["BACKUP_MOVE_FAILED","R2_READ_FAILED","R2_WRITE_FAILED","ATTACHMENT_LOOKUP_FAILED","ATTACHMENT_UPDATE_FAILED"]);
+const storageFailure=(code:string,cause:unknown)=>new Error(code,{cause}),storageFailureCodes=new Set(["BACKUP_MOVE_FAILED","R2_READ_FAILED","R2_WRITE_FAILED","R2_SIGN_FAILED","ATTACHMENT_LOOKUP_FAILED","ATTACHMENT_UPDATE_FAILED"]);
 const corsHeaders=(req:Request)=>{const origin=req.headers.get("Origin")||"";return {"Access-Control-Allow-Headers":"authorization, apikey, content-type, x-client-info, x-supabase-api-version","Access-Control-Allow-Methods":"GET, POST, OPTIONS","Vary":"Origin",...(allowedOrigins.has(origin)?{"Access-Control-Allow-Origin":origin}:{})}};
 const response=(req:Request,body:BodyInit|null,status=200,headers={})=>new Response(body,{status,headers:{...corsHeaders(req),...headers}});
 const adminKey=(()=>{try{const keys=Object.values(JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")||"{}"));return keys.find(key=>typeof key==="string"&&key.startsWith("sb_secret_"))||keys.find(key=>typeof key==="string")||Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||""}catch{return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||""}})();
@@ -25,6 +26,10 @@ async function storageNames(type:keyof typeof allowed,id:string,admin:ReturnType
   if(type==="receipt"){const {data:invoice}=await admin.from("invoices").select("order_number").eq("id",document?.invoice_id||"").maybeSingle();folder=invoice?.order_number||document?.invoice_number||folder}
   return {root:"auftraege",folder:clean(folder),number:clean(document?.number||id)};
 }
+type GeneratedPdfPayload={entityType:keyof typeof allowed;entityId:string;source:"generated_pdf";documentHash:string;byteSize:number};
+const generatedPdfPayload=(value:unknown):GeneratedPdfPayload|null=>{const payload=value as Record<string,unknown>;return payload&&payload.source==="generated_pdf"&&typeof payload.entityType==="string"&&payload.entityType in allowed&&typeof payload.entityId==="string"&&typeof payload.documentHash==="string"&&/^[a-f0-9]{64}$/.test(payload.documentHash)&&Number.isInteger(payload.byteSize)&&Number(payload.byteSize)>=5&&Number(payload.byteSize)<=8_000_000?{entityType:payload.entityType as keyof typeof allowed,entityId:payload.entityId,source:"generated_pdf",documentHash:payload.documentHash,byteSize:Number(payload.byteSize)}:null};
+async function generatedPdfDetails(payload:GeneratedPdfPayload,admin:ReturnType<typeof createClient>){const {data:parent,error:parentError}=await admin.from(allowed[payload.entityType]).select("id,deleted_at").eq("id",payload.entityId).maybeSingle();if(parentError)throw storageFailure("PARENT_LOOKUP_FAILED",parentError);if(!parent||parent.deleted_at)throw new Error("PARENT_NOT_FOUND");const names=await storageNames(payload.entityType,payload.entityId,admin),parts=names.number.split('-'),year=`20${parts[1]||'00'}`,month=parts[2]||'00',key=`${storagePrefix?`${storagePrefix}/`:""}${names.root}/${year}/${month}/${names.folder}/${names.number}-${payload.documentHash}.pdf`;return {key,fileName:`${names.number}.pdf`}}
+async function reconcileGeneratedPdf(payload:GeneratedPdfPayload,admin:ReturnType<typeof createClient>){const {data:existing,error}=await admin.from("file_attachments").select("id,file_name,created_at,version,storage_key,deleted_at").eq("entity_type",payload.entityType).eq("entity_id",payload.entityId).eq("source","generated_pdf").eq("document_hash",payload.documentHash).order("created_at",{ascending:false}).limit(1).maybeSingle();if(error)throw storageFailure("ATTACHMENT_LOOKUP_FAILED",error);if(!existing)return {existing:null,reuseAttachmentId:""};try{await r2.send(new HeadObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:existing.storage_key}));if(!existing.deleted_at)return {existing,reuseAttachmentId:""};const {data:restored,error:restoreError}=await admin.from("file_attachments").update({deleted_at:null,deleted_by:null,delete_reason:null}).eq("id",existing.id).select("id,file_name,created_at,version").single();if(restoreError)throw storageFailure("ATTACHMENT_UPDATE_FAILED",restoreError);return {existing:restored,reuseAttachmentId:""}}catch(error){if(error instanceof Error&&error.message==="ATTACHMENT_UPDATE_FAILED")throw error;if(!isMissingObject(error))throw storageFailure("R2_READ_FAILED",error);if(!existing.deleted_at){const {error:markError}=await admin.from("file_attachments").update({deleted_at:new Date().toISOString(),delete_reason:"R2-Objekt fehlt"}).eq("id",existing.id);if(markError)throw storageFailure("ATTACHMENT_UPDATE_FAILED",markError)}return {existing:null,reuseAttachmentId:existing.id}}}
 async function moveGeneratedPdfsToBackup(entityType:string,entityId:string,admin:ReturnType<typeof createClient>){
   const {data:older,error:olderError}=await admin.from("file_attachments").select("id,storage_key").eq("entity_type",entityType).eq("entity_id",entityId).eq("source","generated_pdf").is("deleted_at",null);
   if(olderError)throw storageFailure("BACKUP_MOVE_FAILED",olderError);
@@ -62,6 +67,29 @@ Deno.serve(async req=>{let uploadedKey="",reuseAttachmentId="";try{
   const admin=createClient(Deno.env.get("SUPABASE_URL")||"",adminKey);
 
   const url=new URL(req.url),action=url.searchParams.get("action");
+  if(action==="sign-generated-pdf"||action==="confirm-generated-pdf"){
+    const payload=generatedPdfPayload(await req.json().catch(()=>null));
+    if(!payload)return response(req,JSON.stringify({error:"INVALID_FILE"}),400,{"Content-Type":"application/json"});
+    const details=await generatedPdfDetails(payload,admin),current=await reconcileGeneratedPdf(payload,admin);
+    if(current.existing)return response(req,JSON.stringify({...current.existing,existing:true}),200,{"Content-Type":"application/json"});
+    if(action==="sign-generated-pdf"){
+      let uploadUrl="";try{uploadUrl=await getSignedUrl(r2,new PutObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:details.key,ContentType:"application/pdf"}),{expiresIn:120})}catch(error){throw storageFailure("R2_SIGN_FAILED",error)}
+      return response(req,JSON.stringify({uploadUrl,expiresIn:120}),200,{"Content-Type":"application/json"});
+    }
+    try{const object=await r2.send(new HeadObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:details.key})),header=await r2.send(new GetObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:details.key,Range:"bytes=0-4"})),bytes=await header.Body?.transformToByteArray();if(object.ContentLength!==payload.byteSize||!String(object.ContentType||"").toLowerCase().startsWith("application/pdf")||!bytes||!hasSignature(bytes,37,80,68,70,45))return response(req,JSON.stringify({error:"INVALID_DIRECT_UPLOAD"}),400,{"Content-Type":"application/json"})}catch(error){throw storageFailure("R2_WRITE_FAILED",error)}
+    uploadedKey=details.key;
+    await moveGeneratedPdfsToBackup(payload.entityType,payload.entityId,admin);
+    const {count,error:countError}=await admin.from("file_attachments").select("id",{count:"exact",head:true}).eq("entity_type",payload.entityType).eq("entity_id",payload.entityId).eq("source","generated_pdf");if(countError)throw storageFailure("ATTACHMENT_LOOKUP_FAILED",countError);
+    const attachment={file_name:details.fileName,content_type:"application/pdf",byte_size:payload.byteSize,storage_key:details.key,source:"generated_pdf",version:(count||0)+1,document_hash:payload.documentHash,created_by:user.id},result=current.reuseAttachmentId?await admin.from("file_attachments").update({...attachment,deleted_at:null,deleted_by:null,delete_reason:null}).eq("id",current.reuseAttachmentId).select("id,file_name,created_at,version").single():await admin.from("file_attachments").insert({entity_type:payload.entityType,entity_id:payload.entityId,...attachment}).select("id,file_name,created_at,version").single(),{data:saved,error}=result;
+    if(error)throw storageFailure("ATTACHMENT_UPDATE_FAILED",error);
+    uploadedKey="";
+    return response(req,JSON.stringify(saved),201,{"Content-Type":"application/json"});
+  }
+  if(action==="download-url"){
+    const id=url.searchParams.get("fileId")||"",{data:file,error:fileError}=await admin.from("file_attachments").select("file_name,content_type,storage_key").eq("id",id).is("deleted_at",null).maybeSingle();
+    if(fileError)throw storageFailure("ATTACHMENT_LOOKUP_FAILED",fileError);if(!file)return response(req,JSON.stringify({error:"NOT_FOUND"}),404,{"Content-Type":"application/json"});
+    try{await r2.send(new HeadObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:file.storage_key}));const downloadUrl=await getSignedUrl(r2,new GetObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:file.storage_key,ResponseContentType:file.content_type,ResponseContentDisposition:`inline; filename*=UTF-8''${encodeURIComponent(file.file_name)}`}),{expiresIn:120});return response(req,JSON.stringify({downloadUrl}),200,{"Content-Type":"application/json"})}catch(error){if(!isMissingObject(error))throw storageFailure("R2_READ_FAILED",error);const {error:markError}=await admin.from("file_attachments").update({deleted_at:new Date().toISOString(),delete_reason:"R2-Objekt fehlt"}).eq("storage_key",file.storage_key).is("deleted_at",null);if(markError)throw storageFailure("ATTACHMENT_UPDATE_FAILED",markError);return response(req,JSON.stringify({error:"MISSING_FILE"}),404,{"Content-Type":"application/json"})}
+  }
   if(action==="download"){
     const id=url.searchParams.get("fileId")||"",{data:file}=await admin.from("file_attachments").select("file_name,content_type,storage_key").eq("id",id).is("deleted_at",null).maybeSingle();
     if(!file)return response(req,JSON.stringify({error:"NOT_FOUND"}),404,{"Content-Type":"application/json"});

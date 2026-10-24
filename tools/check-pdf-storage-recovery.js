@@ -7,6 +7,11 @@ assert.match(edge,/R2_READ_FAILED/,'Lesefehler im Dateispeicher werden nicht ein
 assert.match(edge,/R2_WRITE_FAILED/,'Schreibfehler im Dateispeicher werden nicht eindeutig gemeldet');
 assert.match(edge,/ATTACHMENT_LOOKUP_FAILED/,'Fehler beim Lesen des Speicherstatus werden nicht eindeutig gemeldet');
 assert.match(edge,/ATTACHMENT_UPDATE_FAILED/,'Fehler beim Aktualisieren des Speicherstatus werden nicht eindeutig gemeldet');
+assert.match(edge,/sign-generated-pdf/,'Direkte PDF-Uploads erhalten keine signierte R2-URL');
+assert.match(edge,/confirm-generated-pdf/,'Direkte PDF-Uploads werden nach dem Upload nicht bestätigt');
+assert.match(edge,/download-url/,'Direkte PDF-Downloads erhalten keine signierte R2-URL');
+assert.match(edge,/getSignedUrl/,'R2-URLs werden nicht zeitlich begrenzt signiert');
+assert.match(edge,/Range:"bytes=0-4"/,'Der direkte Upload prüft nicht die PDF-Signatur im R2-Objekt');
 assert.match(edge,/fileKey=source==="generated_pdf"\?`\$\{names\.number\}-\$\{documentHash\}\.pdf`/,'Wiederholte PDF-Erzeugungen verwenden keinen stabilen R2-Schlüssel');
 assert.match(edge,/select\("id,file_name,created_at,version,storage_key,deleted_at"\)/,'Ausgeblendete PDF-Datensätze werden vor dem erneuten Upload nicht berücksichtigt');
 assert.match(edge,/reuseAttachmentId=existing\.id/,'Eine fehlende PDF verwendet ihren bestehenden Datensatz nicht wieder');
@@ -26,4 +31,7 @@ assert.match(app,/const cached=pdfBlobCache\.get\(cacheKey\);if\(cached\)\{await
 assert.match(app,/function showPdfProgress\(\)/,'Die PDF-Schritte werden nicht sichtbar angezeigt');
 assert.match(app,/progress\.success\(activeStep,'PDF im Dateispeicher speichern'\)/,'Ein erfolgreicher Speicher-Schritt wird nicht bestätigt');
 assert.match(app,/progress\.fail\(activeStep/,'Ein fehlgeschlagener PDF-Schritt wird nicht markiert');
+assert.match(app,/storageAction\('sign-generated-pdf'/,'Erzeugte PDFs verwenden keinen direkten signierten Upload');
+assert.match(app,/fetch\(signed\.uploadUrl/,'Die PDF wird nicht direkt in R2 hochgeladen');
+assert.match(app,/storageAction\('download-url'/,'Gespeicherte PDFs werden nicht direkt von R2 geladen');
 console.log('PDF-Speicher-Wiederherstellung ist gegen fehlende R2-Dateien und Backup-Fehler abgesichert.');
