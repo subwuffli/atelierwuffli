@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.114.0';
+const APP_VERSION='TEST V0.0.115.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
@@ -219,7 +219,10 @@ async function uploadAttachment(type,id,file){
 }
 async function deliverPdfBlob(blob,fileName){
   const mobile=window.matchMedia?.('(max-width:900px)').matches||window.matchMedia?.('(pointer: coarse)').matches||window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true,blobUrl=URL.createObjectURL(blob);
-  if(mobile){window.location.assign(blobUrl);return}
+  if(mobile){
+    const overlay=document.createElement('div');overlay.className='pdf-ready-view';overlay.innerHTML=`<div class="pdf-ready-card"><strong>PDF ist bereit</strong><p>${esc(fileName)} wurde erzeugt und gespeichert.</p><div><button type="button" class="secondary" data-pdf-close>Zurück</button><button type="button" class="primary" data-pdf-open>PDF öffnen</button></div></div>`;document.body.appendChild(overlay);
+    const close=()=>{overlay.remove();URL.revokeObjectURL(blobUrl)};overlay.querySelector('[data-pdf-close]').onclick=close;overlay.querySelector('[data-pdf-open]').onclick=()=>window.location.assign(blobUrl);return
+  }
   const opened=window.open(blobUrl,'_blank');if(!opened){const link=document.createElement('a');link.href=blobUrl;link.download=fileName;link.click()}setTimeout(()=>URL.revokeObjectURL(blobUrl),60000)
 }
 const deliverPdf=(doc,fileName)=>deliverPdfBlob(doc.output('blob'),fileName);
