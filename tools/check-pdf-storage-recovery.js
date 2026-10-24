@@ -10,7 +10,10 @@ assert.match(edge,/ATTACHMENT_UPDATE_FAILED/,'Fehler beim Aktualisieren des Spei
 assert.match(edge,/sign-generated-pdf/,'Direkte PDF-Uploads erhalten keine signierte R2-URL');
 assert.match(edge,/confirm-generated-pdf/,'Direkte PDF-Uploads werden nach dem Upload nicht bestätigt');
 assert.match(edge,/download-url/,'Direkte PDF-Downloads erhalten keine signierte R2-URL');
-assert.match(edge,/getSignedUrl/,'R2-URLs werden nicht zeitlich begrenzt signiert');
+assert.match(edge,/AwsClient/,'R2-Zugriffe verwenden keinen fetch-basierten Signierer');
+assert.match(edge,/r2SignedUrl/,'R2-URLs werden nicht zeitlich begrenzt signiert');
+assert.doesNotMatch(edge,/@aws-sdk/,'Der fehleranfällige Node-AWS-Transport wird noch geladen');
+assert.doesNotMatch(edge,/r2\.send/,'Ein R2-Pfad verwendet noch den Node-AWS-Transport');
 assert.match(edge,/Range:"bytes=0-4"/,'Der direkte Upload prüft nicht die PDF-Signatur im R2-Objekt');
 assert.match(edge,/message:"FILE_STORAGE_FAILED"/,'Speicherfehler der Edge Function werden nicht zentral protokolliert');
 assert.match(edge,/fileKey=source==="generated_pdf"\?`\$\{names\.number\}-\$\{documentHash\}\.pdf`/,'Wiederholte PDF-Erzeugungen verwenden keinen stabilen R2-Schlüssel');
