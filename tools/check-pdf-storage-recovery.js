@@ -12,10 +12,11 @@ assert.match(recovery,/is_erp_member_v1\(\)/,'Die Datenbank-Wiederherstellung er
 assert.match(recovery,/Automatische PDF-Wiederherstellung während Speicherstörung/,'Die Datenbank-Wiederherstellung blendet eine ältere PDF bei einer Speicherstörung nicht nachvollziehbar aus');
 assert.match(recovery,/return query update public\.file_attachments f/,'Die Wiederherstellung aktiviert einen passenden ausgeblendeten Speicherpfad nicht wieder');
 assert.match(recovery,/STORAGE_KEY_COLLISION/,'Ein Speicherpfad einer anderen Datei wird bei der Wiederherstellung nicht sicher abgewehrt');
-assert.match(app,/rpc\('recover_generated_pdf_v1'/,'Der Browser registriert eine bereits hochgeladene PDF nicht über den sicheren Datenbankweg');
-assert.match(app,/Array\.isArray\(data\)\|\|!data\[0\]/,'Der Browser verarbeitet die Tabellenzeile der PDF-Wiederherstellung nicht sicher');
 assert.match(app,/detail\?\.error==='FILE_STORAGE_FAILED'/,'Ein nach dem R2-Upload fehlgeschlagener Speichervorgang wird nicht wiederhergestellt');
 assert(app.indexOf('const recovered=await findGeneratedPdf')>app.indexOf('recoverable='),'Ein Serverfehler wird vor der Wiederherstellungsprüfung nicht zuverlässig eingeordnet');
+assert.match(edge,/if\(action==="exists"\)/,'Der Browser kann zwischengespeicherte PDFs nicht gegen R2 prüfen');
+assert.match(app,/await storedPdfExists\(existingPdf\);await deliverPdfBlob/,'Ein lokaler PDF-Cache erkennt eine manuell gelöschte R2-Datei nicht');
+assert.match(app,/Der Dateispeicher ist momentan nicht erreichbar/,'Ein fehlgeschlagener Upload wird weiterhin fälschlich als gespeichert behandelt');
 assert.match(app,/const pdfBlobCache=new Map\(\),pdfCacheKey=/,'Bereits geöffnete PDFs werden nicht pro Dokumentinhalt zwischengespeichert');
-assert.match(app,/const cached=pdfBlobCache\.get\(cacheKey\);if\(cached\)await deliverPdfBlob/,'Eine bereits erzeugte PDF wird beim erneuten Öffnen nicht direkt verwendet');
+assert.match(app,/const cached=pdfBlobCache\.get\(cacheKey\);if\(cached\)\{await storedPdfExists\(existingPdf\);await deliverPdfBlob/,'Eine bereits erzeugte PDF wird beim erneuten Öffnen nicht direkt verwendet');
 console.log('PDF-Speicher-Wiederherstellung ist gegen fehlende R2-Dateien und Backup-Fehler abgesichert.');

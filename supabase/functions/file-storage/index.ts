@@ -66,6 +66,11 @@ Deno.serve(async req=>{let uploadedKey="",reuseAttachmentId="";try{
     if(!file)return response(req,JSON.stringify({error:"NOT_FOUND"}),404,{"Content-Type":"application/json"});
     try{const object=await r2.send(new GetObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:file.storage_key}));return response(req,object.Body?.transformToWebStream()||null,200,{"Content-Type":file.content_type,"Content-Disposition":`inline; filename*=UTF-8''${encodeURIComponent(file.file_name)}`})}catch(error){if(!isMissingObject(error))throw error;const {error:markError}=await admin.from("file_attachments").update({deleted_at:new Date().toISOString(),delete_reason:"R2-Objekt fehlt"}).eq("storage_key",file.storage_key).is("deleted_at",null);if(markError)return response(req,JSON.stringify({error:"MISSING_FILE_MARK_FAILED"}),500,{"Content-Type":"application/json"});return response(req,JSON.stringify({error:"MISSING_FILE"}),404,{"Content-Type":"application/json"})}
   }
+  if(action==="exists"){
+    const id=url.searchParams.get("fileId")||"",{data:file}=await admin.from("file_attachments").select("storage_key").eq("id",id).is("deleted_at",null).maybeSingle();
+    if(!file)return response(req,JSON.stringify({error:"NOT_FOUND"}),404,{"Content-Type":"application/json"});
+    try{await r2.send(new HeadObjectCommand({Bucket:Deno.env.get("R2_BUCKET"),Key:file.storage_key}));return response(req,null,204)}catch(error){if(!isMissingObject(error))throw error;const {error:markError}=await admin.from("file_attachments").update({deleted_at:new Date().toISOString(),delete_reason:"R2-Objekt fehlt"}).eq("storage_key",file.storage_key).is("deleted_at",null);if(markError)return response(req,JSON.stringify({error:"MISSING_FILE_MARK_FAILED"}),500,{"Content-Type":"application/json"});return response(req,JSON.stringify({error:"MISSING_FILE"}),404,{"Content-Type":"application/json"})}
+  }
 
   const form=await req.formData(),entityType=String(form.get("entityType")||""),entityId=String(form.get("entityId")||""),file=form.get("file");
   if(!(entityType in allowed)||!entityId||!(file instanceof File)||file.size>8_000_000)return response(req,JSON.stringify({error:"INVALID_FILE"}),400,{"Content-Type":"application/json"});
