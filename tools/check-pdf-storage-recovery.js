@@ -32,8 +32,9 @@ assert.match(app,/await storedPdfExists\(existingPdf\);progress\.success\(active
 assert.match(app,/Der Dateispeicher ist momentan nicht erreichbar/,'Ein fehlgeschlagener Upload wird weiterhin fälschlich als gespeichert behandelt');
 assert.match(app,/const pdfBlobCache=new Map\(\),pdfCacheKey=/,'Bereits geöffnete PDFs werden nicht pro Dokumentinhalt zwischengespeichert');
 assert.match(app,/const cached=pdfBlobCache\.get\(cacheKey\);if\(cached&&!isMobilePdfDevice\(\)\)\{await storedPdfExists\(existingPdf\);progress\.success/,'Eine bereits erzeugte Desktop-PDF wird beim erneuten Öffnen nicht direkt verwendet');
-assert.match(app,/if\(isMobilePdfDevice\(\)\)\{openMobilePdf\(downloadUrl\);return\}/,'Mobilgeräte öffnen gespeicherte PDFs nicht über die signierte HTTPS-URL');
-assert.match(app,/function openMobilePdf\(url\)\{window\.location\.assign\(url\)\}/,'Mobilgeräte öffnen die PDF nicht im aktuellen Browser-Tab');
+assert.match(app,/window\.open\('about:blank','_blank'\)/,'Mobilgeräte reservieren keinen Tab während der Nutzeraktion');
+assert.match(app,/if\(isMobilePdfDevice\(\)\)\{openMobilePdf\(downloadUrl,pdfWindow\);return\}/,'Mobilgeräte öffnen gespeicherte PDFs nicht über die signierte HTTPS-URL');
+assert.match(app,/function openMobilePdf\(url,pdfWindow\)\{if\(pdfWindow&&!pdfWindow\.closed\)\{pdfWindow\.location\.replace\(url\);return\}window\.location\.assign\(url\)\}/,'Der reservierte mobile PDF-Tab wird nicht zur PDF weitergeleitet');
 assert.match(app,/function showPdfProgress\(\)/,'Die PDF-Schritte werden nicht sichtbar angezeigt');
 assert.match(app,/progress\.success\(activeStep,'PDF im Dateispeicher speichern'\)/,'Ein erfolgreicher Speicher-Schritt wird nicht bestätigt');
 assert.match(app,/progress\.fail\(activeStep/,'Ein fehlgeschlagener PDF-Schritt wird nicht markiert');
