@@ -33,6 +33,7 @@ assert.match(app,/Der Dateispeicher ist momentan nicht erreichbar/,'Ein fehlgesc
 assert.match(app,/const pdfBlobCache=new Map\(\),pdfCacheKey=/,'Bereits geöffnete PDFs werden nicht pro Dokumentinhalt zwischengespeichert');
 assert.match(app,/const cached=pdfBlobCache\.get\(cacheKey\);if\(cached&&!isMobilePdfDevice\(\)\)\{await storedPdfExists\(existingPdf\);progress\.success/,'Eine bereits erzeugte Desktop-PDF wird beim erneuten Öffnen nicht direkt verwendet');
 assert.match(app,/if\(isMobilePdfDevice\(\)\)\{openMobilePdf\(downloadUrl,file\.file_name\);return\}/,'Mobilgeräte öffnen gespeicherte PDFs nicht über die signierte HTTPS-URL');
+assert.match(app,/function openMobilePdf\(url,fileName\).*target="_blank"/,'Der mobile PDF-Link wird nicht als direkte Browser-Navigation geöffnet');
 assert.match(app,/function showPdfProgress\(\)/,'Die PDF-Schritte werden nicht sichtbar angezeigt');
 assert.match(app,/progress\.success\(activeStep,'PDF im Dateispeicher speichern'\)/,'Ein erfolgreicher Speicher-Schritt wird nicht bestätigt');
 assert.match(app,/progress\.fail\(activeStep/,'Ein fehlgeschlagener PDF-Schritt wird nicht markiert');
