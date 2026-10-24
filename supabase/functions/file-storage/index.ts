@@ -54,19 +54,19 @@ async function moveGeneratedPdfsToBackup(entityType:string,entityId:string,admin
     }
   }
 }
-Deno.serve(async req=>{let uploadedKey="",reuseAttachmentId="";try{
+Deno.serve(async req=>{let uploadedKey="",reuseAttachmentId="",action="",userId="",logAdmin:ReturnType<typeof createClient>|null=null;try{
   const origin=req.headers.get("Origin")||"";
   if(req.method==="OPTIONS")return response(req,null,204);
   if(origin&&!allowedOrigins.has(origin))return response(req,JSON.stringify({error:"ORIGIN_NOT_ALLOWED"}),403,{"Content-Type":"application/json"});
   const token=req.headers.get("Authorization")||"",userClient=createClient(Deno.env.get("SUPABASE_URL")||"",Deno.env.get("SUPABASE_ANON_KEY")||"",{global:{headers:{Authorization:token}}});
   const {data:{user}}=await userClient.auth.getUser();
-  if(!user)return response(req,JSON.stringify({error:"AUTH_REQUIRED"}),401,{"Content-Type":"application/json"});
+  if(!user)return response(req,JSON.stringify({error:"AUTH_REQUIRED"}),401,{"Content-Type":"application/json"});userId=user.id;
   const {data:isMember,error:memberError}=await userClient.rpc("is_erp_member_v1");
   if(memberError||!isMember)return response(req,JSON.stringify({error:"ERP_MEMBER_REQUIRED"}),403,{"Content-Type":"application/json"});
   if(!adminKey)return response(req,JSON.stringify({error:"SERVER_KEY_MISSING"}),500,{"Content-Type":"application/json"});
-  const admin=createClient(Deno.env.get("SUPABASE_URL")||"",adminKey);
+  const admin=createClient(Deno.env.get("SUPABASE_URL")||"",adminKey);logAdmin=admin;
 
-  const url=new URL(req.url),action=url.searchParams.get("action");
+  const url=new URL(req.url);action=url.searchParams.get("action")||"upload";
   if(action==="sign-generated-pdf"||action==="confirm-generated-pdf"){
     const payload=generatedPdfPayload(await req.json().catch(()=>null));
     if(!payload)return response(req,JSON.stringify({error:"INVALID_FILE"}),400,{"Content-Type":"application/json"});
@@ -121,8 +121,10 @@ Deno.serve(async req=>{let uploadedKey="",reuseAttachmentId="";try{
   return response(req,JSON.stringify(saved),201,{"Content-Type":"application/json"});
   }catch(error){
     if(uploadedKey)try{await r2.send(new DeleteObjectsCommand({Bucket:Deno.env.get("R2_BUCKET"),Delete:{Objects:[{Key:uploadedKey}]}}))}catch(cleanupError){console.error("Neues R2-Objekt konnte nicht bereinigt werden",cleanupError)}
-    console.error("File storage request failed",error);
     const code=error instanceof Error&&storageFailureCodes.has(error.message)?error.message:"FILE_STORAGE_FAILED";
+    const cause=error instanceof Error?String(error.cause instanceof Error?error.cause.message:error.message).slice(0,500):"unknown";
+    if(logAdmin&&userId)try{await logAdmin.from("app_error_log").insert({user_id:userId,app_version:"edge:file-storage",message:"FILE_STORAGE_FAILED",context:{action,code,cause}})}catch(logError){console.error("Storage failure could not be logged",logError)}
+    console.error("File storage request failed",{action,code,cause});
     return response(req,JSON.stringify({error:code}),500,{"Content-Type":"application/json"});
   }
 });

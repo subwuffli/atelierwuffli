@@ -12,6 +12,7 @@ assert.match(edge,/confirm-generated-pdf/,'Direkte PDF-Uploads werden nach dem U
 assert.match(edge,/download-url/,'Direkte PDF-Downloads erhalten keine signierte R2-URL');
 assert.match(edge,/getSignedUrl/,'R2-URLs werden nicht zeitlich begrenzt signiert');
 assert.match(edge,/Range:"bytes=0-4"/,'Der direkte Upload prüft nicht die PDF-Signatur im R2-Objekt');
+assert.match(edge,/message:"FILE_STORAGE_FAILED"/,'Speicherfehler der Edge Function werden nicht zentral protokolliert');
 assert.match(edge,/fileKey=source==="generated_pdf"\?`\$\{names\.number\}-\$\{documentHash\}\.pdf`/,'Wiederholte PDF-Erzeugungen verwenden keinen stabilen R2-Schlüssel');
 assert.match(edge,/select\("id,file_name,created_at,version,storage_key,deleted_at"\)/,'Ausgeblendete PDF-Datensätze werden vor dem erneuten Upload nicht berücksichtigt');
 assert.match(edge,/reuseAttachmentId=existing\.id/,'Eine fehlende PDF verwendet ihren bestehenden Datensatz nicht wieder');
@@ -34,4 +35,6 @@ assert.match(app,/progress\.fail\(activeStep/,'Ein fehlgeschlagener PDF-Schritt 
 assert.match(app,/storageAction\('sign-generated-pdf'/,'Erzeugte PDFs verwenden keinen direkten signierten Upload');
 assert.match(app,/fetch\(signed\.uploadUrl/,'Die PDF wird nicht direkt in R2 hochgeladen');
 assert.match(app,/storageAction\('download-url'/,'Gespeicherte PDFs werden nicht direkt von R2 geladen');
+assert.match(app,/PDF_DIRECT_UPLOAD_FAILED/,'Fehler beim direkten PDF-Upload werden nicht protokolliert');
+assert.match(app,/PDF_PROXY_UPLOAD_FAILED/,'Fehler beim Proxy-PDF-Upload werden nicht protokolliert');
 console.log('PDF-Speicher-Wiederherstellung ist gegen fehlende R2-Dateien und Backup-Fehler abgesichert.');
