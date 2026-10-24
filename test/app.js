@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.113.0';
+const APP_VERSION='TEST V0.0.114.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
@@ -218,16 +218,9 @@ async function uploadAttachment(type,id,file){
   const {error}=await supabaseClient.functions.invoke('file-storage',{body:data});if(error){const detail=await error.context?.json?.().catch(()=>null);throw new Error(detail?.detail||detail?.error||detail?.message||error.message)}
 }
 async function deliverPdfBlob(blob,fileName){
-  const file=new File([blob],fileName,{type:'application/pdf'}),mobile=window.matchMedia?.('(max-width:900px)').matches||window.matchMedia?.('(pointer: coarse)').matches||window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;
-  if(mobile){
-    const blobUrl=URL.createObjectURL(blob),canShare=Boolean(navigator.share&&navigator.canShare?.({files:[file]})),overlay=document.createElement('div');overlay.className='pdf-preview-view';overlay.innerHTML=`<div class="pdf-preview-controls"><button type="button" class="secondary" data-pdf-close>Schliessen</button><strong>${esc(fileName)}</strong><button type="button" class="primary" data-pdf-action>${canShare?'PDF teilen':'PDF herunterladen'}</button></div><iframe title="PDF-Vorschau ${esc(fileName)}" src="${blobUrl}"></iframe>`;
-    document.body.appendChild(overlay);
-    const close=()=>{overlay.remove();URL.revokeObjectURL(blobUrl)};
-    overlay.querySelector('[data-pdf-close]').onclick=close;
-    overlay.querySelector('[data-pdf-action]').onclick=async()=>{if(!canShare){const link=document.createElement('a');link.href=blobUrl;link.download=fileName;link.click();return}try{await navigator.share({files:[file],title:fileName})}catch(error){if(error?.name!=='AbortError'){console.warn('PDF konnte nicht direkt geteilt werden:',error);const link=document.createElement('a');link.href=blobUrl;link.download=fileName;link.click()}}};
-    return
-  }
-  const blobUrl=URL.createObjectURL(blob),opened=window.open(blobUrl,'_blank');if(!opened){const link=document.createElement('a');link.href=blobUrl;link.download=fileName;link.click()}setTimeout(()=>URL.revokeObjectURL(blobUrl),60000)
+  const mobile=window.matchMedia?.('(max-width:900px)').matches||window.matchMedia?.('(pointer: coarse)').matches||window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true,blobUrl=URL.createObjectURL(blob);
+  if(mobile){window.location.assign(blobUrl);return}
+  const opened=window.open(blobUrl,'_blank');if(!opened){const link=document.createElement('a');link.href=blobUrl;link.download=fileName;link.click()}setTimeout(()=>URL.revokeObjectURL(blobUrl),60000)
 }
 const deliverPdf=(doc,fileName)=>deliverPdfBlob(doc.output('blob'),fileName);
 function activeCustomers(){return state.customers.filter(c=>!c.archived)}
