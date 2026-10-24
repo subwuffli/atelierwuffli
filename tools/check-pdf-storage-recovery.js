@@ -3,6 +3,10 @@ assert.match(edge,/async function moveGeneratedPdfsToBackup/,'Vorherige PDFs wer
 assert.match(edge,/if\(!isMissingObject\(error\)\)throw new Error\("BACKUP_MOVE_FAILED"/,'R2-Ausfälle ausserhalb von 404 werden noch als fehlend behandelt');
 assert.match(edge,/BACKUP_MOVE_FAILED/,'Backup-Fehler werden nicht eindeutig an den Browser gemeldet');
 assert.match(edge,/FILE_STORAGE_FAILED/,'Unerwartete Function-Fehler liefern keine CORS-fähige JSON-Antwort');
+assert.match(edge,/R2_READ_FAILED/,'Lesefehler im Dateispeicher werden nicht eindeutig gemeldet');
+assert.match(edge,/R2_WRITE_FAILED/,'Schreibfehler im Dateispeicher werden nicht eindeutig gemeldet');
+assert.match(edge,/ATTACHMENT_LOOKUP_FAILED/,'Fehler beim Lesen des Speicherstatus werden nicht eindeutig gemeldet');
+assert.match(edge,/ATTACHMENT_UPDATE_FAILED/,'Fehler beim Aktualisieren des Speicherstatus werden nicht eindeutig gemeldet');
 assert.match(edge,/fileKey=source==="generated_pdf"\?`\$\{names\.number\}-\$\{documentHash\}\.pdf`/,'Wiederholte PDF-Erzeugungen verwenden keinen stabilen R2-Schlüssel');
 assert.match(edge,/select\("id,file_name,created_at,version,storage_key,deleted_at"\)/,'Ausgeblendete PDF-Datensätze werden vor dem erneuten Upload nicht berücksichtigt');
 assert.match(edge,/reuseAttachmentId=existing\.id/,'Eine fehlende PDF verwendet ihren bestehenden Datensatz nicht wieder');
@@ -12,11 +16,14 @@ assert.match(recovery,/is_erp_member_v1\(\)/,'Die Datenbank-Wiederherstellung er
 assert.match(recovery,/Automatische PDF-Wiederherstellung während Speicherstörung/,'Die Datenbank-Wiederherstellung blendet eine ältere PDF bei einer Speicherstörung nicht nachvollziehbar aus');
 assert.match(recovery,/return query update public\.file_attachments f/,'Die Wiederherstellung aktiviert einen passenden ausgeblendeten Speicherpfad nicht wieder');
 assert.match(recovery,/STORAGE_KEY_COLLISION/,'Ein Speicherpfad einer anderen Datei wird bei der Wiederherstellung nicht sicher abgewehrt');
-assert.match(app,/detail\?\.error==='FILE_STORAGE_FAILED'/,'Ein nach dem R2-Upload fehlgeschlagener Speichervorgang wird nicht wiederhergestellt');
+assert.match(app,/\['FILE_STORAGE_FAILED','R2_READ_FAILED','R2_WRITE_FAILED'\]/,'Temporäre R2-Fehler werden nicht wiederholt versucht');
 assert(app.indexOf('const recovered=await findGeneratedPdf')>app.indexOf('recoverable='),'Ein Serverfehler wird vor der Wiederherstellungsprüfung nicht zuverlässig eingeordnet');
 assert.match(edge,/if\(action==="exists"\)/,'Der Browser kann zwischengespeicherte PDFs nicht gegen R2 prüfen');
-assert.match(app,/await storedPdfExists\(existingPdf\);await deliverPdfBlob/,'Ein lokaler PDF-Cache erkennt eine manuell gelöschte R2-Datei nicht');
+assert.match(app,/await storedPdfExists\(existingPdf\);progress\.success\(activeStep/,'Ein lokaler PDF-Cache erkennt eine manuell gelöschte R2-Datei nicht');
 assert.match(app,/Der Dateispeicher ist momentan nicht erreichbar/,'Ein fehlgeschlagener Upload wird weiterhin fälschlich als gespeichert behandelt');
 assert.match(app,/const pdfBlobCache=new Map\(\),pdfCacheKey=/,'Bereits geöffnete PDFs werden nicht pro Dokumentinhalt zwischengespeichert');
-assert.match(app,/const cached=pdfBlobCache\.get\(cacheKey\);if\(cached\)\{await storedPdfExists\(existingPdf\);await deliverPdfBlob/,'Eine bereits erzeugte PDF wird beim erneuten Öffnen nicht direkt verwendet');
+assert.match(app,/const cached=pdfBlobCache\.get\(cacheKey\);if\(cached\)\{await storedPdfExists\(existingPdf\);progress\.success/,'Eine bereits erzeugte PDF wird beim erneuten Öffnen nicht direkt verwendet');
+assert.match(app,/function showPdfProgress\(\)/,'Die PDF-Schritte werden nicht sichtbar angezeigt');
+assert.match(app,/progress\.success\(activeStep,'PDF im Dateispeicher speichern'\)/,'Ein erfolgreicher Speicher-Schritt wird nicht bestätigt');
+assert.match(app,/progress\.fail\(activeStep/,'Ein fehlgeschlagener PDF-Schritt wird nicht markiert');
 console.log('PDF-Speicher-Wiederherstellung ist gegen fehlende R2-Dateien und Backup-Fehler abgesichert.');
