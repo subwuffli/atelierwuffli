@@ -1,4 +1,4 @@
-const assert=require('node:assert/strict'),fs=require('node:fs'),edge=fs.readFileSync('supabase/functions/file-storage/index.ts','utf8'),app=fs.readFileSync('test/app.js','utf8');
+const assert=require('node:assert/strict'),fs=require('node:fs'),edge=fs.readFileSync('supabase/functions/file-storage/index.ts','utf8'),app=fs.readFileSync('test/app.js','utf8'),styles=fs.readFileSync('test/styles.css','utf8');
 assert.match(edge,/async function moveGeneratedPdfsToBackup/,'Vorherige PDFs werden nicht vor dem neuen Datenbankeintrag verschoben');
 assert.match(edge,/if\(!isMissingObject\(error\)\)throw new Error\("BACKUP_MOVE_FAILED"/,'R2-Ausfälle ausserhalb von 404 werden noch als fehlend behandelt');
 assert.match(edge,/BACKUP_MOVE_FAILED/,'Backup-Fehler werden nicht eindeutig an den Browser gemeldet');
@@ -23,6 +23,7 @@ assert.match(app,/action=download&fileId=/,'Die App lädt gespeicherte PDFs nich
 assert.match(app,/Der Dateispeicher ist momentan nicht erreichbar/,'Ein fehlgeschlagener Upload wird weiterhin fälschlich als gespeichert behandelt');
 assert.match(app,/className='pdf-preview-view'/,'PDFs erhalten keine einheitliche Vorschau');
 assert.match(app,/<iframe title="PDF-Vorschau/,'Die PDF-Vorschau zeigt den gespeicherten Beleg nicht an');
+assert.match(styles,/\.pdf-preview-view\{position:fixed/,'Die PDF-Vorschau ist nicht sichtbar ueber der App positioniert');
 assert.match(app,/function showPdfProgress\(\)/,'Die PDF-Schritte werden nicht sichtbar angezeigt');
 assert.match(app,/progress\.success\(activeStep,'PDF im Dateispeicher speichern'\)/,'Ein erfolgreicher Speicher-Schritt wird nicht bestätigt');
 assert.match(app,/progress\.fail\(activeStep/,'Ein fehlgeschlagener PDF-Schritt wird nicht markiert');
