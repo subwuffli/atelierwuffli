@@ -1,4 +1,4 @@
-const assert=require('node:assert/strict'),fs=require('node:fs'),edge=fs.readFileSync('supabase/functions/file-storage/index.ts','utf8'),app=fs.readFileSync('test/app.js','utf8'),styles=fs.readFileSync('test/styles.css','utf8');
+const assert=require('node:assert/strict'),fs=require('node:fs'),edge=fs.readFileSync('supabase/functions/file-storage/index.ts','utf8'),app=fs.readFileSync('test/app.js','utf8'),styles=fs.readFileSync('test/styles.css','utf8'),liveApp=fs.readFileSync('app.js','utf8'),liveStyles=fs.readFileSync('styles.css','utf8');
 assert.match(edge,/async function moveGeneratedPdfsToBackup/,'Vorherige PDFs werden nicht vor dem neuen Datenbankeintrag verschoben');
 assert.match(edge,/if\(!isMissingObject\(error\)\)throw new Error\("BACKUP_MOVE_FAILED"/,'R2-Ausfälle ausserhalb von 404 werden noch als fehlend behandelt');
 assert.match(edge,/BACKUP_MOVE_FAILED/,'Backup-Fehler werden nicht eindeutig an den Browser gemeldet');
@@ -28,4 +28,8 @@ assert.match(app,/function showPdfProgress\(\)/,'Die PDF-Schritte werden nicht s
 assert.match(app,/progress\.success\(activeStep,'PDF im Dateispeicher speichern'\)/,'Ein erfolgreicher Speicher-Schritt wird nicht bestätigt');
 assert.match(app,/progress\.fail\(activeStep/,'Ein fehlgeschlagener PDF-Schritt wird nicht markiert');
 assert.doesNotMatch(app,/sign-generated-pdf|confirm-generated-pdf|download-url|signed\.uploadUrl|pdfWindow|isMobilePdfDevice/,'Die App enthält noch einen direkten Browser-R2-Weg');
+assert.match(liveApp,/action=download&fileId=/,'Live lädt gespeicherte PDFs nicht über die Edge Function');
+assert.match(liveApp,/function showPdfProgress\(\)/,'Live zeigt keine PDF-Schritte an');
+assert.match(liveApp,/className='pdf-preview-view'/,'Live zeigt keine PDF-Vorschau an');
+assert.match(liveStyles,/\.pdf-preview-view\{position:fixed/,'Die Live-PDF-Vorschau ist nicht sichtbar positioniert');
 console.log('PDF-Speicher nutzt nur den Edge-Function-Weg und stellt fehlende Dateien wieder her.');
