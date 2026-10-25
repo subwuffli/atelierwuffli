@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DEFAULT_LOGO='assets/atelier-wuffli-logo.jpeg';
 const SUPABASE_URL='https://xiqbveuuhngeosqetfuo.supabase.co';
 const SUPABASE_KEY='sb_publishable_b8fuZ9lkbj97c5OKVxqA7Q_7TzgqzpM';
-const APP_VERSION='TEST V0.0.124.0';
+const APP_VERSION='TEST V0.0.125.0';
 const appVersionElement=document.querySelector('#app-version');if(appVersionElement)appVersionElement.textContent=APP_VERSION;
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 if(window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true)document.documentElement.classList.add('standalone-app');
@@ -995,13 +995,14 @@ async function setPaymentReconciled(type,id,reconciled){
 const csvCell=value=>`"${String(value??'').replaceAll('"','""')}"`;
 function downloadCsv(file,headers,rows){const body=[headers,...rows].map(row=>row.map(csvCell).join(';')).join('\r\n'),blob=new Blob(['\ufeff',body],{type:'text/csv;charset=utf-8'}),link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=file;link.click();URL.revokeObjectURL(link.href)}
 function downloadAnnualCsv(){const data=annualReportData(),rows=[...data.income.map(invoice=>['Einnahme',incomeDate(invoice),invoice.number,invoice.customerSnapshot?.name||'',paymentLabel(invoice.paymentMethod),invoice.total]),...data.expenses.map(expense=>['Ausgabe',expense.date,expense.number||'',supplierName(expense),expense.category||'Sonstiges',-expenseBusinessAmount(expense)])];downloadCsv(`buchhaltung-${financeYear}.csv`,['Art','Datum','Beleg','Partner','Kategorie / Zahlungsart','Geschäftsbetrag CHF'],rows);notice('Jahresauswertung als CSV exportiert.')}
-async function pdfReport(title,data,fileName,openItems){
+async function pdfReport(title,data,fileName,openItems,includeIncomeRows){
   if(!window.jspdf?.jsPDF){alert('Die PDF-Funktion konnte nicht geladen werden.');return}
   const {incomeTotal,result}=reportTotals(data),{jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4',compress:true});let y=22;
-  doc.setFontSize(20);doc.text(title,20,y);y+=12;doc.setFontSize(10);[['Einnahmen',incomeTotal],['Geschäftsausgaben',data.businessExpenses],['Ergebnis vor Steuern',result]].forEach(([label,value])=>{doc.text(label,20,y);doc.text(money(value),190,y,{align:'right'});y+=7});y+=6;doc.setFontSize(13);doc.text('Umsatz nach Zahlungsart',20,y);y+=8;doc.setFontSize(10);for(const [method,total] of [...data.payments.entries()].sort(([a],[b])=>a.localeCompare(b,'de'))){doc.text(method,20,y);doc.text(money(total),190,y,{align:'right'});y+=6}if(openItems){y+=6;doc.setFontSize(13);doc.text('Offene Posten',20,y);y+=8;doc.setFontSize(10);doc.text(`Kundenrechnungen: ${money(data.openCustomers.reduce((sum,invoice)=>sum+Number(invoice.total||0),0))}`,20,y);y+=6;doc.text(`Lieferantenrechnungen: ${money(data.openSuppliers.reduce((sum,expense)=>sum+Number(expense.amount||0),0))}`,20,y)}await deliverPdf(doc,fileName);
+  const nextPage=space=>{if(y+space>280){doc.addPage();y=22}},incomeRows=[...data.income].sort((a,b)=>incomeDate(b).localeCompare(incomeDate(a)));
+  doc.setFontSize(20);doc.text(title,20,y);y+=12;if(includeIncomeRows&&incomeRows.length){const header=()=>{nextPage(12);doc.setFontSize(13);doc.text('Bezahlte Aufträge',20,y);y+=7;doc.setFontSize(8);[['Auftrag',20],['Rechnung',58],['Zahlungsart',102],['Betrag',190]].forEach(([label,x])=>doc.text(label,x,y,{align:x===190?'right':'left'}));y+=5};header();for(const invoice of incomeRows){if(y+6>280){doc.addPage();y=22;header()}doc.text(String(invoice.orderNumber||'–'),20,y);doc.text(String(invoice.number||'–'),58,y);doc.text(paymentLabel(invoice.paymentMethod),102,y);doc.text(money(invoice.total),190,y,{align:'right'});y+=6}y+=4}nextPage(36);doc.setFontSize(10);[['Einnahmen',incomeTotal],['Geschäftsausgaben',data.businessExpenses],['Ergebnis vor Steuern',result]].forEach(([label,value])=>{doc.text(label,20,y);doc.text(money(value),190,y,{align:'right'});y+=7});y+=6;nextPage(14);doc.setFontSize(13);doc.text('Umsatz nach Zahlungsart',20,y);y+=8;doc.setFontSize(10);for(const [method,total] of [...data.payments.entries()].sort(([a],[b])=>a.localeCompare(b,'de'))){nextPage(6);doc.text(method,20,y);doc.text(money(total),190,y,{align:'right'});y+=6}if(openItems){nextPage(20);y+=6;doc.setFontSize(13);doc.text('Offene Posten',20,y);y+=8;doc.setFontSize(10);doc.text(`Kundenrechnungen: ${money(data.openCustomers.reduce((sum,invoice)=>sum+Number(invoice.total||0),0))}`,20,y);y+=6;doc.text(`Lieferantenrechnungen: ${money(data.openSuppliers.reduce((sum,expense)=>sum+Number(expense.amount||0),0))}`,20,y)}await deliverPdf(doc,fileName);
 }
 const pdfAnnualReport=()=>pdfReport(`Jahresauswertung ${financeYear}`,annualReportData(),`Jahresauswertung-${financeYear}.pdf`,true);
-const pdfMonthlyBookkeepingReport=()=>pdfReport(`Monatsauswertung ${monthLabel(financeMonth)}`,monthlyReportData(),`Monatsauswertung-${financeMonth}.pdf`);
+const pdfMonthlyBookkeepingReport=()=>pdfReport(`Monatsauswertung ${monthLabel(financeMonth)}`,monthlyReportData(),`Monatsauswertung-${financeMonth}.pdf`,false,true);
 
 const originalRender=render;
 render=function(view){

@@ -5,7 +5,9 @@ assert.match(source,/id="finance-month" type="month" value="\$\{financeMonth\}"/
 assert.match(source,/<th>Auftrag<\/th><th>Rechnung<\/th><th>Zahlungsart<\/th><th>Betrag<\/th>/,'Auftragsliste der Monatsauswertung fehlt');
 assert.match(source,/invoice\.orderNumber\|\|'–'/,'Auftragsnummer wird nicht angezeigt');
 assert.match(source,/paymentLabel\(invoice\.paymentMethod\)/,'Zahlungsart wird nicht angezeigt');
-assert.match(source,/function pdfReport\(title,data,fileName,openItems\)/,'Gemeinsamer PDF-Export fehlt');
-assert.match(source,/const pdfMonthlyBookkeepingReport=\(\)=>pdfReport\(`Monatsauswertung \$\{monthLabel\(financeMonth\)\}`/,'PDF-Export der Monatsauswertung fehlt');
+assert.match(source,/function pdfReport\(title,data,fileName,openItems,includeIncomeRows\)/,'Gemeinsamer PDF-Export fehlt');
+assert.match(source,/doc\.text\('Bezahlte Aufträge',20,y\)/,'Auftragsliste fehlt im PDF');
+assert.match(source,/\[\['Auftrag',20\],\['Rechnung',58\],\['Zahlungsart',102\],\['Betrag',190\]\]/,'PDF-Spalten der Auftragsliste fehlen');
+assert.match(source,/pdfReport\(`Monatsauswertung \$\{monthLabel\(financeMonth\)\}`,monthlyReportData\(\),`Monatsauswertung-\$\{financeMonth\}\.pdf`,false,true\)/,'PDF-Export der Monatsauswertung enthält keine Auftragsliste');
 assert.match(source,/financeMonth=event\.target\.value;saveUserPreferences\(\);renderBookkeeping\(\)/,'Ausgewählter Monat wird nicht gespeichert');
 console.log('Monatsauswertung: OK');
