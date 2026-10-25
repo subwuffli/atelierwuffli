@@ -11,22 +11,8 @@
 4. Den SQL-Inhalt aus `supabase/test-file-attachments-v0057.sql` im
    Test-Supabase-SQL-Editor ausfuehren.
 
-Die Browser-App erhaelt nie R2-Zugangsdaten. Die Edge Function erstellt nur
-kurzlebige, auf genau eine PDF beschraenkte Upload- und Download-URLs.
-
-5. Im Bucket unter **Settings → CORS Policy** diese Regel hinterlegen:
-
-```json
-[
-  {
-    "AllowedOrigins": ["https://subwuffli.github.io"],
-    "AllowedMethods": ["GET", "PUT", "HEAD"],
-    "AllowedHeaders": ["content-type"],
-    "ExposeHeaders": ["ETag"],
-    "MaxAgeSeconds": 3600
-  }
-]
-```
-
-Die URLs laufen nach zwei Minuten ab. Der Browser kann damit weder andere
-Dateipfade noch R2-Zugangsdaten sehen oder verwenden.
+Die Browser-App erhaelt nie R2-Zugangsdaten und kommuniziert auch nicht direkt
+mit R2. Lesen und Schreiben laufen ausschliesslich durch die Supabase Edge
+Function. Dadurch ist keine Bucket-CORS-Regel fuer die ERP-App erforderlich.
+Falls ein anderes System direkt auf den Bucket zugreifen soll, braucht dieses
+eine eigene, so eng wie moeglich begrenzte CORS-Regel.
