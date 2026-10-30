@@ -20,6 +20,8 @@ Die Publishable Keys der Browser-Apps dürfen öffentlich sein. Secret- und Serv
 
 ## Aktueller Teststand
 
+`TEST V0.0.128.0` setzt die sieben Punkte der Apple-Designprüfung um: kontrastfeste Rückkehrmarkierung, Schutz ungespeicherter modaler Formulare, Rückkehr mit Ursprung/Filter/Sortierung/Scrollposition und Tastaturfokus, per Tastatur und Escape bedienbares mobiles Menü, zugängliche Dialogtitel und Statusmeldungen, vollständige Berücksichtigung reduzierter Bewegung bei Ladeindikatoren sowie eine in vier Gruppen gegliederte Seitenleiste. Datenexport bleibt unter Einstellungen → Datensicherung erreichbar. Meldungen mit „Rückgängig“ bleiben bis zur Bedienung oder Schliessung sichtbar. Erfolgreich gespeicherte Formulare schliessen ohne Verwerfen-Rückfrage. Eine neue Datenbankmigration ist nicht nötig.
+
 `TEST V0.0.127.0` ergänzt die Startseite **Heute im Atelier** mit heutigen offenen Abholungen und Lieferungen, überfälligen Rechnungen, drei Kennzahlen und den letzten Aufträgen. Kennzahlen öffnen sichtbar gefilterte Auftrags- und Rechnungslisten. Unter **Einstellungen → Erscheinungsbild** stehen Atelier Braun, Salbei, Marineblau und Neutral sowie Hell, Dunkel und die automatische Geräteeinstellung zur Verfügung. Die Auswahl wird pro Benutzer in den bestehenden persönlichen Einstellungen gespeichert; eine neue Datenbankmigration ist nicht nötig. Ungespeicherte Farbvorschauen werden beim Seitenwechsel verworfen. PDFs und Druckansichten behalten ihre eigenen Farben.
 
 Lokale Prüfung: `node test/home-appearance-check.js`. Der optionale Browsercheck `node tools/check-home-appearance-browser.js` benötigt Playwright und Microsoft Edge. Er fängt sämtliche Anfragen lokal ab und kontaktiert keine ERP-Datenbank.

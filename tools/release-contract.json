@@ -1,5 +1,6 @@
 {
   "features": [
+    {"name":"Zugaengliche Bedienung und Formularschutz", "app":["window.erpInteraction.mayClose","window.erpInteraction.restoreReturn"], "files":["interaction.js","interaction.css"]},
     {"name":"Persoenliches Erscheinungsbild", "app":["appearance:window.erpAppearance.get()","window.erpAppearance.mount"], "files":["appearance.js","appearance.css"]},
     {"name":"Startseite Heute im Atelier", "app":["window.erpHome.render()","order-status-filter","invoice-status-filter"], "files":["home.js","home.css"]},
     {"name":"Zahlungsvalidierung", "app":["function bindRequiredPaymentFields"], "testMigration":"test-payment-validation-v0126.sql", "liveMigration":"live-payment-validation-v0127.sql"},

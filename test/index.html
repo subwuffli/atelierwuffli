@@ -7,9 +7,10 @@
   <!-- ponytail: inline handlers remain until the legacy templates are migrated to addEventListener. -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://xiqbveuuhngeosqetfuo.supabase.co wss://xiqbveuuhngeosqetfuo.supabase.co https://openplzapi.org https://nominatim.openstreetmap.org https://router.project-osrm.org; frame-src blob:; worker-src blob:; form-action 'self'; upgrade-insecure-requests">
   <title>Atelier Wuffli ERP – Testumgebung</title>
-    <link rel="stylesheet" href="styles.css?v=0.0.127.0">
-    <link rel="stylesheet" href="appearance.css?v=0.0.127.0">
-    <link rel="stylesheet" href="home.css?v=0.0.127.0">
+    <link rel="stylesheet" href="styles.css?v=0.0.128.0">
+    <link rel="stylesheet" href="appearance.css?v=0.0.128.0">
+    <link rel="stylesheet" href="home.css?v=0.0.128.0">
+    <link rel="stylesheet" href="interaction.css?v=0.0.128.0">
 </head>
 <body class="test-environment">
   <div class="test-environment-banner" role="status">TESTUMGEBUNG – KEINE ECHTEN DATEN</div>
@@ -36,34 +37,43 @@
   </div>
 
   <div id="app" class="app hidden">
-    <aside class="sidebar">
+    <aside id="sidebar" class="sidebar">
+      <button id="sidebar-close" class="secondary" type="button">Menü schliessen</button>
       <div class="brand"><img src="assets/atelier-wuffli-logo.jpeg" alt="Atelier Wuffli"><div><strong>Atelier Wuffli</strong><small>Einfaches ERP</small></div></div>
-      <nav id="nav">
+      <nav id="nav" aria-label="Hauptbereiche">
+        <section class="nav-group" aria-labelledby="nav-atelier"><h2 id="nav-atelier">Atelier</h2>
         <button data-view="dashboard" class="active">Übersicht</button>
-        <button data-view="statistics">Statistik</button>
         <button data-view="appointments">Termine</button>
         <button data-view="customers">Kunden</button>
         <button data-view="orders">Aufträge</button>
+        </section>
+        <section class="nav-group" aria-labelledby="nav-finance"><h2 id="nav-finance">Finanzen</h2>
         <button data-view="invoices">Rechnungen</button>
         <button data-view="receipts">Quittungen</button>
         <button data-view="expenses">Ausgaben</button>
         <button data-view="income">Einnahmen</button>
-        <button data-view="inventory">Inventar</button>
         <button data-view="bookkeeping">Buchhaltung</button>
+        </section>
+        <section class="nav-group" aria-labelledby="nav-organisation"><h2 id="nav-organisation">Organisation</h2>
+        <button data-view="inventory">Inventar</button>
+        <button data-view="statistics">Statistik</button>
+        </section>
+        <section class="nav-group" aria-labelledby="nav-management"><h2 id="nav-management">Verwaltung</h2>
         <button data-view="settings">Einstellungen</button>
         <button data-view="trash">Papierkorb</button>
+        </section>
       </nav>
       <section id="active-users" class="active-users" aria-live="polite">
         <button id="active-users-toggle" class="active-users-toggle" type="button" aria-expanded="true"><span>Aktive Benutzer</span><strong id="active-users-count">0</strong></button>
         <div id="active-users-list" class="active-users-list"><span class="active-users-empty">Verbindung wird aufgebaut …</span></div>
       </section>
       <button id="reload-button" class="secondary reload-button">Neu laden</button>
-      <div id="app-version" class="app-version" aria-label="App-Version">TEST V0.0.127.0</div>
+      <div id="app-version" class="app-version" aria-label="App-Version">TEST V0.0.128.0</div>
       <button id="lock-button" class="secondary">Sperren</button>
     </aside>
     <main>
-      <header class="topbar"><button id="menu-button" aria-label="Menü">☰</button><div><h1 id="page-title">Übersicht</h1></div><div class="topbar-actions"><button id="global-search-button" class="secondary">Suchen</button><button id="quick-export" class="secondary">Daten exportieren</button></div></header>
-      <div id="notice" class="notice hidden"></div>
+      <header class="topbar"><button id="menu-button" aria-label="Menü" aria-controls="sidebar" aria-expanded="false">☰</button><div><h1 id="page-title" tabindex="-1">Übersicht</h1></div><div class="topbar-actions"><button id="global-search-button" class="secondary">Suchen</button></div></header>
+      <div id="notice" class="notice hidden" role="status" aria-live="polite" aria-atomic="true"></div>
       <section id="content"></section>
     </main>
   </div>
@@ -75,13 +85,15 @@
     <button type="button" data-mobile-action="more"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>Mehr</button>
   </nav>
 
-  <dialog id="modal"><div class="modal-shell"><header><h2 id="modal-title"></h2><button type="button" onclick="closeModal()" aria-label="Schliessen">×</button></header><div id="modal-body"></div></div></dialog>
+  <button id="sidebar-backdrop" type="button" aria-label="Menü schliessen" tabindex="-1" hidden></button>
+  <dialog id="modal" aria-labelledby="modal-title"><div class="modal-shell"><header><h2 id="modal-title"></h2><button type="button" onclick="closeModal()" aria-label="Schliessen">×</button></header><div id="modal-body"></div></div></dialog>
   <input id="import-file" type="file" accept="application/json,.json" hidden>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
   <script src="vendor/swissqrbill-4.4.1.js"></script>
-  <script src="appearance.js?v=0.0.127.0"></script>
-  <script src="home.js?v=0.0.127.0"></script>
-  <script src="app.js?v=0.0.127.0"></script>
+  <script src="appearance.js?v=0.0.128.0"></script>
+  <script src="home.js?v=0.0.128.0"></script>
+  <script src="interaction.js?v=0.0.128.0"></script>
+  <script src="app.js?v=0.0.128.0"></script>
 </body>
 </html>

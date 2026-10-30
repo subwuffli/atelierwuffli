@@ -1,0 +1,23 @@
+.sidebar{overflow-y:auto}.brand{margin-bottom:18px}.nav-group{display:grid;gap:3px}.nav-group h2{margin:14px 14px 5px;font-size:.72rem;font-weight:650;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+#sidebar-close{display:none}#sidebar-backdrop[hidden]{display:none}
+.notice{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.notice>span{flex:1;min-width:160px}.notice>.text-button{color:inherit}
+.discard-confirm{position:absolute;inset:0;z-index:2;display:grid;place-items:center;padding:14px;background:#0006;color:var(--ink)}.discard-card{display:grid;gap:16px;max-width:420px;width:100%;padding:22px;border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--shadow)}.discard-confirm h2{margin:0;font-size:1.3rem;overflow-wrap:anywhere}.discard-confirm p{margin:0}.discard-confirm .actions{display:flex;flex-wrap:wrap}.discard-confirm button{min-height:48px;flex:1}
+@media screen{
+  #content .table-wrap tbody tr.document-return-focus td{background:var(--soft);color:var(--ink);animation:none}
+  #content .table-wrap tbody tr.document-return-focus .muted{color:var(--ink)}
+  #content .table-wrap tbody tr.document-return-focus{outline:2px solid var(--accent);outline-offset:2px}
+  .home-order.document-return-focus,.home-appointment.document-return-focus{outline:2px solid var(--accent);outline-offset:-3px}
+  .home-order,.home-appointment,.home-metric,.primary,.secondary{transition:background-color 100ms ease,border-color 100ms ease}
+  :is(.home-order,.home-appointment,.home-metric,.primary,.secondary):active{filter:brightness(.94)}
+  @media(max-width:900px){
+    .sidebar{transition:transform 180ms ease,visibility 180ms;isolation:isolate}
+    .sidebar:not(.open){visibility:hidden}.sidebar.open{visibility:visible;z-index:100}
+    body.mobile-menu-open{overflow:hidden}
+    #sidebar-close{display:block;flex-shrink:0;margin:0 0 14px;min-height:44px}
+    #sidebar-backdrop{position:fixed;inset:38px 0 0;z-index:99;display:block;border:0;background:#0006;border-radius:0}
+  }
+  @media(prefers-reduced-motion:reduce){
+    .working-overlay span,.pdf-progress-step.is-working .pdf-progress-icon{animation:none}
+    .sidebar,.home-order,.home-appointment,.home-metric,.primary,.secondary{transition:none}
+  }
+}
