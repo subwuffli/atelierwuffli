@@ -52,6 +52,33 @@ $$;
 revoke all on function public.is_erp_writer_v1() from public,anon;
 grant execute on function public.is_erp_writer_v1() to authenticated;
 
+-- Inventarartikel verwenden einen eigenen Nummernkreis (AR) und dürfen
+-- weder Auftrags- noch Ausgabennummern verbrauchen.
+create or replace function public.next_document_number(p_prefix text,p_date date)
+returns text language plpgsql security invoker set search_path=public as $$
+declare n integer;
+begin
+  if p_prefix not in ('AF','RE','QU','AG','AR') then raise exception 'Ungültiges Präfix'; end if;
+  if p_prefix='AF' then
+    select coalesce(max(split_part(number,'-',5)::integer),0)+1 into n from orders where order_date=p_date and number ~ '^AF-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{3}$';
+  elsif p_prefix='RE' then
+    select coalesce(max(split_part(number,'-',5)::integer),0)+1 into n from invoices where invoice_date=p_date and number ~ '^RE-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{3}$';
+  elsif p_prefix='QU' then
+    select coalesce(max(split_part(number,'-',5)::integer),0)+1 into n from receipts where receipt_date=p_date and number ~ '^QU-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{3}$';
+  elsif p_prefix='AG' then
+    select coalesce(max(split_part(number,'-',5)::integer),0)+1 into n from expenses where expense_date=p_date and number ~ '^AG-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{3}$';
+  else
+    select coalesce(max(split_part(item_number,'-',5)::integer),0)+1 into n
+      from inventory_items
+      where item_number ~ ('^AR-' || to_char(p_date,'YY-MM-DD') || '-[0-9]{3}$');
+  end if;
+  insert into document_counters(prefix,counter_date,value) values(p_prefix,p_date,n)
+  on conflict(prefix,counter_date) do update set value=document_counters.value+1 returning value into n;
+  return p_prefix||'-'||to_char(p_date,'YY-MM-DD')||'-'||lpad(n::text,3,'0');
+end $$;
+grant execute on function public.next_document_number(text,date) to authenticated;
+revoke all on function public.next_document_number(text,date) from anon;
+
 drop trigger if exists audit_inventory_items on public.inventory_items;
 create trigger audit_inventory_items after insert or update or delete on public.inventory_items
   for each row execute function public.audit_row_change_v1();

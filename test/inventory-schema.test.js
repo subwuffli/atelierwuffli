@@ -17,6 +17,8 @@ for (const contract of [
   /raise exception 'INSUFFICIENT_STOCK'/i,
   /create or replace function public\.is_erp_writer_v1\(\)/i,
   /role in \('admin','user'\)/i,
+  /p_prefix not in \('AF','RE','QU','AG','AR'\)/i,
+  /item_number ~ \('\^AR-' \|\| to_char\(p_date,'YY-MM-DD'\)/i,
   /record_inventory_movement_v1[\s\S]+security definer/i,
   /create_inventory_item_v1[\s\S]+security definer/i,
   /set_inventory_item_archived_v1[\s\S]+security definer/i,
