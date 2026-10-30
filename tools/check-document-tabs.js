@@ -7,7 +7,7 @@ for(const appFile of ['app.js','test/app.js']){
   assert(app.includes("tab('Quittung','receipt'"),`${appFile}: Quittung-Reiter fehlt`);
   assert(app.includes('PDF öffnen'),`${appFile}: PDF-Aktion fehlt`);
   assert(!app.includes('>Rechnung & Zahlung</button>'),`${appFile}: Überflüssige Rechnung-und-Zahlung-Aktion ist noch vorhanden`);
-  const returnCode=appFile.startsWith('test/')?fs.readFileSync('test/interaction.js','utf8'):app;
+  const returnCode=fs.readFileSync(appFile.startsWith('test/')?'test/interaction.js':'interaction.js','utf8');
   assert(app.includes('documentListReturn={view:origin,id}')||app.includes('documentListReturn=window.erpInteraction.captureReturn(origin,id)'),`${appFile}: Rückkehrziel aus der Dokumentliste fehlt`);
   assert(returnCode.includes("row.scrollIntoView({block:'center'})")||returnCode.includes('window.scrollTo(0,target.scrollY)'),`${appFile}: Rückkehrposition wird nicht wiederhergestellt`);
   assert(returnCode.includes("row.classList.add('document-return-focus')"),`${appFile}: Rückkehrzeile wird nicht hervorgehoben`);
