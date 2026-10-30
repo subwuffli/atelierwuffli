@@ -34,6 +34,14 @@ if(!$liveMigrations.Count){Write-Host 'FEHLER Keine Live-Migrationen dokumentier
 
 $contract=Get-Content tools\release-contract.json -Raw | ConvertFrom-Json
 foreach($feature in $contract.features){
+  foreach($asset in @($feature.files|Where-Object {$_})){
+    foreach($environment in @(@{label='Test';prefix='test/'},@{label='Live';prefix=''})){
+      $assetPath="$($environment.prefix)$asset"
+      if(!(Test-Path -LiteralPath $assetPath) -or !(Select-String -Path "$($environment.prefix)index.html" -SimpleMatch $asset -Quiet)){
+        Write-Host "FEHLER $($feature.name): Datei fehlt oder ist nicht eingebunden in $($environment.label) ($asset)" -ForegroundColor Red;$failed=$true
+      }
+    }
+  }
   foreach($marker in @($feature.app|Where-Object {$_})){if((Select-String -Path test\app.js -SimpleMatch $marker -Quiet) -and !(Select-String -Path app.js -SimpleMatch $marker -Quiet)){Write-Host "FEHLER $($feature.name): App-Merkmal fehlt in Live ($marker)" -ForegroundColor Red;$failed=$true}}
   foreach($marker in @($feature.css|Where-Object {$_})){if((Select-String -Path test\styles.css -SimpleMatch $marker -Quiet) -and !(Select-String -Path styles.css -SimpleMatch $marker -Quiet)){Write-Host "FEHLER $($feature.name): CSS-Merkmal fehlt in Live ($marker)" -ForegroundColor Red;$failed=$true}}
   if($feature.testMigration -and (Test-Path "supabase\$($feature.testMigration)") -and !(Test-Path "supabase\$($feature.liveMigration)")){Write-Host "FEHLER $($feature.name): Live-Migration fehlt ($($feature.liveMigration))" -ForegroundColor Red;$failed=$true}

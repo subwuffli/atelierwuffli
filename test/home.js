@@ -1,0 +1,28 @@
+window.erpHome=(()=>{
+  const day=()=>new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Europe/Zurich'}).format(new Date());
+  const matchesOrder=(order,filter)=>filter==='all'||order.status===({working:'In Arbeit',completed:'Abgeschlossen'})[filter];
+  const matchesInvoice=(invoice,filter)=>filter==='all'||(filter==='overdue'?invoice.status==='Offen'&&Boolean(invoice.dueDate)&&invoice.dueDate<day():invoice.status===({open:'Offen',paid:'Bezahlt',cancelled:'Storniert'})[filter]);
+  function summary(orders,invoices,day){
+    const active=orders.filter(order=>!order.archived);
+    const open=invoices.filter(invoice=>!invoice.archived&&invoice.status==='Offen');
+    return {working:active.filter(order=>order.status==='In Arbeit'),open,overdue:open.filter(invoice=>invoice.dueDate&&invoice.dueDate<day),recent:active.slice().sort((a,b)=>String(b.createdAt||b.date||'').localeCompare(String(a.createdAt||a.date||''))||String(b.number||'').localeCompare(String(a.number||''),'de-CH',{numeric:true})).slice(0,5),total:open.reduce((sum,invoice)=>sum+(Number(invoice.total)||0),0)};
+  }
+  function openList(view,filter){
+    render(view);
+    const control=document.querySelector(view==='orders'?'#order-status-filter':'#invoice-status-filter');
+    if(control){control.value=filter;control.dispatchEvent(new Event('change',{bubbles:true}));control.focus()}
+  }
+  function renderHome(){
+    setTitle('Übersicht');
+    const now=new Date(),day=new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Europe/Zurich'}).format(now);
+    const model=summary(state.orders,state.invoices,day),appointments=openAppointments().filter(order=>order.fulfilmentDate===day);
+    const headingDate=new Intl.DateTimeFormat('de-CH',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'Europe/Zurich'}).format(now);
+    $('#content').innerHTML=`<div class="home-heading"><div><h2>Heute im Atelier</h2><p class="muted">${esc(headingDate)}</p></div><button type="button" class="primary" onclick="orderForm()">＋ Neuer Auftrag</button></div>
+      <section aria-labelledby="home-today-title"><div class="home-section-head"><h2 id="home-today-title">Das steht heute an</h2><button type="button" class="text-button" onclick="render('appointments')">Alle Termine →</button></div><div class="home-appointments card">${appointments.length?appointments.map(order=>`<button type="button" class="home-appointment" data-home-order="${esc(order.id)}"><span class="home-appointment-icon" aria-hidden="true">${order.fulfilment==='Lieferung'?'↗':'↙'}</span><span><strong>${esc(order.customerSnapshot?.name||'Ohne Kundenname')}</strong><small>${esc(order.number)}</small></span><span class="badge">${esc(order.fulfilment||'Termin')}</span><span aria-hidden="true">›</span></button>`).join(''):'<div class="home-empty"><strong>Heute keine offenen Abholungen oder Lieferungen</strong><p class="muted">Alle weiteren Termine findest du in der Terminübersicht.</p></div>'}</div></section>
+      ${model.overdue.length?`<section class="home-attention" aria-label="Überfällige Rechnungen"><span class="home-attention-icon" aria-hidden="true">!</span><div><strong>${model.overdue.length} ${model.overdue.length===1?'Rechnung ist':'Rechnungen sind'} überfällig</strong><span>${money(model.overdue.reduce((sum,invoice)=>sum+(Number(invoice.total)||0),0))} offen</span></div><button type="button" class="text-button" onclick="erpHome.openList('invoices','overdue')">Ansehen →</button></section>`:''}
+      <div class="home-metrics"><button type="button" class="card home-metric" onclick="erpHome.openList('orders','working')"><span class="muted">In Arbeit</span><strong>${model.working.length} ${model.working.length===1?'Auftrag':'Aufträge'}</strong><small>Aufträge ansehen →</small></button><button type="button" class="card home-metric" onclick="erpHome.openList('invoices','open')"><span class="muted">Offene Rechnungen</span><strong>${model.open.length}</strong><small>Nur offene anzeigen →</small></button><button type="button" class="card home-metric" onclick="erpHome.openList('invoices','open')"><span class="muted">Offener Betrag</span><strong>${money(model.total)}</strong><small>Rechnungen ansehen →</small></button></div>
+      <section aria-labelledby="home-recent-title"><div class="home-section-head"><h2 id="home-recent-title">Letzte Aufträge</h2><button type="button" class="text-button" onclick="render('orders')">Alle anzeigen →</button></div><div class="home-recent card">${model.recent.length?model.recent.map(order=>`<button type="button" class="home-order" data-home-order="${esc(order.id)}"><span><strong>${esc(order.customerSnapshot?.name||'Ohne Kundenname')}</strong><small>${esc(order.number)} · ${date(order.date)}</small></span><span class="badge ${order.status==='Abgeschlossen'?'ok':'warn'}">${esc(order.status)}</span><span class="home-amount">${money(order.total)} <span aria-hidden="true">›</span></span></button>`).join(''):'<div class="home-empty"><strong>Noch keine Aufträge vorhanden</strong><p class="muted">Erfasse deinen ersten Auftrag über „Neuer Auftrag“.</p></div>'}</div></section><div class="home-footer"><span class="muted">${activeCustomers().length} aktive Kunden</span><button type="button" class="text-button" onclick="customerForm()">＋ Neuer Kunde</button></div>`;
+    document.querySelectorAll('[data-home-order]').forEach(button=>button.onclick=()=>showDocumentDetail('order',button.dataset.homeOrder));
+  }
+  return Object.freeze({summary,openList,matchesOrder,matchesInvoice,render:renderHome});
+})();

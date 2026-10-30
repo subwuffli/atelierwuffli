@@ -7,7 +7,9 @@
   <!-- ponytail: inline handlers remain until the legacy templates are migrated to addEventListener. -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://xiqbveuuhngeosqetfuo.supabase.co wss://xiqbveuuhngeosqetfuo.supabase.co https://openplzapi.org https://nominatim.openstreetmap.org https://router.project-osrm.org; frame-src blob:; worker-src blob:; form-action 'self'; upgrade-insecure-requests">
   <title>Atelier Wuffli ERP – Testumgebung</title>
-    <link rel="stylesheet" href="styles.css?v=0.0.126.0">
+    <link rel="stylesheet" href="styles.css?v=0.0.127.0">
+    <link rel="stylesheet" href="appearance.css?v=0.0.127.0">
+    <link rel="stylesheet" href="home.css?v=0.0.127.0">
 </head>
 <body class="test-environment">
   <div class="test-environment-banner" role="status">TESTUMGEBUNG – KEINE ECHTEN DATEN</div>
@@ -56,7 +58,7 @@
         <div id="active-users-list" class="active-users-list"><span class="active-users-empty">Verbindung wird aufgebaut …</span></div>
       </section>
       <button id="reload-button" class="secondary reload-button">Neu laden</button>
-      <div id="app-version" class="app-version" aria-label="App-Version">TEST V0.0.126.0</div>
+      <div id="app-version" class="app-version" aria-label="App-Version">TEST V0.0.127.0</div>
       <button id="lock-button" class="secondary">Sperren</button>
     </aside>
     <main>
@@ -67,11 +69,10 @@
   </div>
 
   <nav id="mobile-bottom-nav" class="mobile-bottom-nav" aria-label="Mobile Navigation">
-    <button type="button" data-mobile-view="dashboard"><span>⌂</span>Home</button>
-    <button type="button" data-mobile-view="appointments"><span>□</span>Termine</button>
-    <button type="button" class="mobile-create" data-mobile-action="create" aria-label="Schnell erfassen"><span>＋</span></button>
-    <button type="button" data-mobile-action="search"><span>⌕</span>Suche</button>
-    <button type="button" data-mobile-action="more"><span>☰</span>Mehr</button>
+    <button type="button" data-mobile-view="dashboard"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10H3Z M9 20v-7h6v7"/></svg>Übersicht</button>
+    <button type="button" data-mobile-view="appointments"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 11h18"/></svg>Termine</button>
+    <button type="button" data-mobile-view="orders"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2h6v2M9 10h6m-6 4h6m-6 4h4"/></svg>Aufträge</button>
+    <button type="button" data-mobile-action="more"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>Mehr</button>
   </nav>
 
   <dialog id="modal"><div class="modal-shell"><header><h2 id="modal-title"></h2><button type="button" onclick="closeModal()" aria-label="Schliessen">×</button></header><div id="modal-body"></div></div></dialog>
@@ -79,6 +80,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
   <script src="vendor/swissqrbill-4.4.1.js"></script>
-  <script src="app.js?v=0.0.126.0"></script>
+  <script src="appearance.js?v=0.0.127.0"></script>
+  <script src="home.js?v=0.0.127.0"></script>
+  <script src="app.js?v=0.0.127.0"></script>
 </body>
 </html>

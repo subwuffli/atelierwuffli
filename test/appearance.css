@@ -1,0 +1,72 @@
+/* Screen-only themes keep PDF and printed document colors independent. */
+@media screen {
+  :root {
+    color-scheme:light dark;
+    --ink:light-dark(#28221f,#f6eee7);--muted:light-dark(#746d68,#c5b6aa);
+    --paper:light-dark(#fbf9f6,#211d1a);--panel:light-dark(#ffffff,#2d2723);
+    --line:light-dark(#e7e0d9,#51453c);--accent:light-dark(#6d3f2b,#e8b99d);
+    --accent2:light-dark(#ead9cc,#453429);--on-accent:light-dark(#ffffff,#322117);
+    --soft:light-dark(#f3e9e1,#453429);--ok:light-dark(#2f6b4f,#a5dfb9);
+    --ok-bg:light-dark(#e6f2eb,#203b2d);--warn:light-dark(#875018,#f4c78b);
+    --warn-bg:light-dark(#fff0db,#44331e);--danger:light-dark(#a23a35,#ffb9a6);
+    --danger-bg:light-dark(#fff0ef,#432c24);--shadow:0 10px 30px #0000000d;
+  }
+  :root[data-appearance="light"]{color-scheme:light}
+  :root[data-appearance="dark"]{color-scheme:dark}
+  :root[data-palette="salbei"]{
+    --ink:light-dark(#233129,#edf5ed);--muted:light-dark(#5e6e62,#b6c6b8);
+    --paper:light-dark(#f6f8f4,#1c231e);--panel:light-dark(#ffffff,#27312a);
+    --line:light-dark(#dce4db,#46564a);--accent:light-dark(#365c43,#acd4b4);
+    --on-accent:light-dark(#ffffff,#182d20);--soft:light-dark(#e7efe5,#324b39);--accent2:var(--soft);
+  }
+  :root[data-palette="marine"]{
+    --ink:light-dark(#253248,#edf2fa);--muted:light-dark(#627087,#b8c5d8);
+    --paper:light-dark(#f5f7fa,#19212c);--panel:light-dark(#ffffff,#242f3e);
+    --line:light-dark(#dce2eb,#41516a);--accent:light-dark(#294b73,#b1cbee);
+    --on-accent:light-dark(#ffffff,#172b45);--soft:light-dark(#e6edf6,#30435e);--accent2:var(--soft);
+  }
+  :root[data-palette="neutral"]{
+    --ink:light-dark(#292929,#f2f2f2);--muted:light-dark(#696969,#c0c0c0);
+    --paper:light-dark(#f7f7f7,#202020);--panel:light-dark(#ffffff,#2b2b2b);
+    --line:light-dark(#e0e0e0,#4c4c4c);--accent:light-dark(#454545,#d6d6d6);
+    --on-accent:light-dark(#ffffff,#252525);--soft:light-dark(#ededed,#414141);--accent2:var(--soft);
+  }
+  body{background:var(--paper);color:var(--ink)}
+  .lock-screen{background:var(--paper)}
+  .sidebar{background:var(--panel);color:var(--ink);border-right:1px solid var(--line)}
+  .sidebar nav button,.sidebar>.secondary{color:var(--muted)}
+  .sidebar nav button:hover,.sidebar nav button.active{background:var(--soft);color:var(--accent)}
+  .sidebar>.secondary,.reload-button{border-color:var(--line)!important}
+  .brand small,.active-user small,.active-users-empty,.app-version{color:var(--muted)}
+  .active-users{border-color:var(--line)}
+  .active-users-toggle,.active-user{color:var(--ink)}
+  .active-users-toggle strong{background:var(--soft);color:var(--accent)}
+  .topbar,.detail-toolbar,.form-actions,.mobile-bottom-nav{background:var(--panel)}
+  .primary,.mobile-bottom-nav .mobile-create{background:var(--accent);color:var(--on-accent)}
+  .secondary,.table-wrap,.table-wrap tr,dialog,input,select,textarea,.calendar-day,.detail-value,
+  .search-result,.address-suggestions,.address-suggestions button,.mobile-row-toggle,
+  .document-more-actions summary,.document-more-actions>div,.version-update,
+  .pdf-preview-controls,.pdf-progress-card,.pdf-progress-step{background:var(--panel);color:var(--ink);border-color:var(--line)}
+  th,.hint,.subscription-dates,.badge,.document-tab,.form-summary{background:var(--soft);color:var(--muted)}
+  input,select,textarea{border-color:var(--line)}
+  .hint,.version-update span,.pdf-progress-card>p,.pdf-progress-step small{color:var(--muted)}
+  .mobile-bottom-nav button.active,.calendar-day.has-appointments,.search-result:hover,
+  .address-suggestions button:hover,.address-suggestions button:focus-visible,
+  #content .table-wrap tbody tr[data-compact-document="true"]:hover td{background:var(--soft);color:var(--accent)}
+  .dashboard-link:hover,.search-result:hover{border-color:var(--accent)}
+  .badge.ok,.notice,.pdf-progress-step.is-success{background:var(--ok-bg);color:var(--ok)}
+  .badge.warn,.inventory-low-stock td{background:var(--warn-bg);color:var(--warn)}
+  .badge.danger,.danger,.overdue-row td,.pdf-progress-step.is-failed{background:var(--danger-bg);color:var(--danger);border-color:var(--danger)}
+  .overdue-row .muted{color:var(--danger)}
+  .horizontal-track{background:var(--soft)}
+  .bar,.bar.year-0,.chart-legend .year-0,.horizontal-series>.year-0{background:var(--accent)}
+  .document-tab.active{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+  .document-more-actions summary::after{color:var(--muted)}
+  :where(button,a,input,select,textarea,summary,[tabindex]):focus-visible{outline:3px solid var(--accent)!important;outline-offset:3px}
+  #appearance-settings h2{margin-top:0}
+  .settings-block h2{overflow-wrap:anywhere}
+  #appearance-settings .form-actions{position:static;margin-inline:0;margin-bottom:0;padding-inline:0;flex-wrap:wrap}
+  #appearance-settings [role="status"]{min-height:1.5em;margin-bottom:0;color:var(--muted)}
+  @media(prefers-reduced-motion:reduce){.sidebar,.dashboard-link{transition:none}.dashboard-link:hover{transform:none}}
+  @media(prefers-reduced-transparency:reduce){.topbar,.detail-toolbar,.mobile-bottom-nav{backdrop-filter:none}}
+}
