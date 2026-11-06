@@ -3,7 +3,7 @@ import { AwsClient } from "npm:aws4fetch@1.0.20";
 
 const allowedOrigins=new Set(["https://subwuffli.github.io"]);
 const allowedFileTypes=new Set(["application/pdf","image/jpeg","image/png","image/webp"]);
-const allowed={order:"orders",invoice:"invoices",receipt:"receipts",expense:"expenses"} as const;
+const allowed={order:"orders",invoice:"invoices",receipt:"receipts",expense:"expenses",inventory:"inventory_items"} as const;
 const r2Endpoint=`https://${Deno.env.get("R2_ACCOUNT_ID")}.r2.cloudflarestorage.com`,r2Bucket=Deno.env.get("R2_BUCKET")||"",r2=new AwsClient({service:"s3",region:"auto",retries:2,accessKeyId:Deno.env.get("R2_ACCESS_KEY_ID")||"",secretAccessKey:Deno.env.get("R2_SECRET_ACCESS_KEY")||""});
 const r2Url=(key:string)=>`${r2Endpoint}/${encodeURIComponent(r2Bucket)}/${key.split("/").map(encodeURIComponent).join("/")}`;
 const r2Failure=(status:number)=>Object.assign(new Error(`R2_${status}`),{$metadata:{httpStatusCode:status}});
@@ -20,6 +20,10 @@ const hasSignature=(bytes:Uint8Array,...signature:number[])=>signature.every((va
 const isAllowedFile=(file:File,bytes:Uint8Array)=>{if(!allowedFileTypes.has(file.type))return false;return file.type==="application/pdf"?hasSignature(bytes,37,80,68,70,45):file.type==="image/jpeg"?hasSignature(bytes,255,216,255):file.type==="image/png"?hasSignature(bytes,137,80,78,71,13,10,26,10):hasSignature(bytes,82,73,70,70)&&hasSignature(bytes.slice(8),87,69,66,80)};
 const isMissingObject=(error:unknown)=>{const result=error as {name?:string;$metadata?:{httpStatusCode?:number}};return result?.$metadata?.httpStatusCode===404||result?.name==="NoSuchKey"||result?.name==="NotFound"};
 async function storageNames(type:keyof typeof allowed,id:string,admin:ReturnType<typeof createClient>){
+  if(type==="inventory"){
+    const {data}=await admin.from("inventory_items").select("item_number").eq("id",id).single();
+    return {root:"inventar",folder:clean(data?.item_number||id),number:clean(data?.item_number||id)};
+  }
   if(type==="expense"){
     const {data}=await admin.from("expenses").select("number").eq("id",id).single();
     return {root:"ausgaben",folder:clean(data?.number||id),number:clean(data?.number||id)};
@@ -75,10 +79,13 @@ Deno.serve(async req=>{let uploadedKey="",reuseAttachmentId="",action="",userId=
   if(!(entityType in allowed)||!entityId||!(file instanceof File)||file.size>8_000_000)return response(req,JSON.stringify({error:"INVALID_FILE"}),400,{"Content-Type":"application/json"});
   const bytes=new Uint8Array(await file.arrayBuffer());
   if(!isAllowedFile(file,bytes))return response(req,JSON.stringify({error:"INVALID_FILE"}),400,{"Content-Type":"application/json"});
-  const {data:parent,error:parentError}=await admin.from(allowed[entityType as keyof typeof allowed]).select("id,deleted_at").eq("id",entityId).maybeSingle();
+  let parent:{id:string;archived?:boolean;deleted_at?:string|null}|null=null,parentError:{message:string}|null=null;
+  if(entityType==="inventory")({data:parent,error:parentError}=await admin.from("inventory_items").select("id,archived").eq("id",entityId).maybeSingle());
+  else ({data:parent,error:parentError}=await admin.from(allowed[entityType as keyof typeof allowed]).select("id,deleted_at").eq("id",entityId).maybeSingle());
   if(parentError)return response(req,JSON.stringify({error:"PARENT_LOOKUP_FAILED",detail:parentError.message}),500,{"Content-Type":"application/json"});
-  if(!parent||parent.deleted_at)return response(req,JSON.stringify({error:"PARENT_NOT_FOUND"}),404,{"Content-Type":"application/json"});
-  const source=String(form.get("source")||"upload"),documentHash=source==="generated_pdf"?String(form.get("documentHash")||""):null;if(source!=="upload"&&source!=="generated_pdf")return response(req,JSON.stringify({error:"INVALID_SOURCE"}),400,{"Content-Type":"application/json"});
+  if(!parent||(entityType==="inventory"?parent.archived:parent.deleted_at))return response(req,JSON.stringify({error:"PARENT_NOT_FOUND"}),404,{"Content-Type":"application/json"});
+  const source=String(form.get("source")||"upload"),documentHash=source==="generated_pdf"?String(form.get("documentHash")||""):null;if(source!=="upload"&&source!=="generated_pdf"&&source!=="inventory_photo")return response(req,JSON.stringify({error:"INVALID_SOURCE"}),400,{"Content-Type":"application/json"});
+  if(source==="inventory_photo"&&(entityType!=="inventory"||!file.type.startsWith("image/")))return response(req,JSON.stringify({error:"INVALID_FILE"}),400,{"Content-Type":"application/json"});
   if(source==="generated_pdf"&&!/^[a-f0-9]{64}$/.test(documentHash||""))return response(req,JSON.stringify({error:"INVALID_DOCUMENT_HASH"}),400,{"Content-Type":"application/json"});
   if(documentHash){const {data:existing,error:existingError}=await admin.from("file_attachments").select("id,file_name,created_at,version,storage_key,deleted_at").eq("entity_type",entityType).eq("entity_id",entityId).eq("source",source).eq("document_hash",documentHash).order("created_at",{ascending:false}).limit(1).maybeSingle();if(existingError)throw storageFailure("ATTACHMENT_LOOKUP_FAILED",existingError);if(existing){try{await r2Head(existing.storage_key);if(!existing.deleted_at)return response(req,JSON.stringify({...existing,existing:true}),200,{"Content-Type":"application/json"});const {data:restored,error:restoreError}=await admin.from("file_attachments").update({deleted_at:null,deleted_by:null,delete_reason:null}).eq("id",existing.id).select("id,file_name,created_at,version").single();if(restoreError)throw storageFailure("ATTACHMENT_UPDATE_FAILED",restoreError);return response(req,JSON.stringify({...restored,existing:true}),200,{"Content-Type":"application/json"})}catch(error){if(error instanceof Error&&error.message==="ATTACHMENT_UPDATE_FAILED")throw error;if(!isMissingObject(error))throw storageFailure("R2_READ_FAILED",error);if(!existing.deleted_at){const {error:markError}=await admin.from("file_attachments").update({deleted_at:new Date().toISOString(),delete_reason:"R2-Objekt fehlt"}).eq("id",existing.id);if(markError)throw storageFailure("ATTACHMENT_UPDATE_FAILED",markError)}reuseAttachmentId=existing.id}}}
   const version=source==="generated_pdf"?(await admin.from("file_attachments").select("id",{count:"exact",head:true}).eq("entity_type",entityType).eq("entity_id",entityId).eq("source",source)).count!+1:null;
@@ -86,7 +93,19 @@ Deno.serve(async req=>{let uploadedKey="",reuseAttachmentId="",action="",userId=
   uploadedKey=key;
   try{await r2Put(key,bytes,file.type)}catch(error){throw storageFailure("R2_WRITE_FAILED",error)}
   if(source==="generated_pdf")await moveGeneratedPdfsToBackup(entityType,entityId,admin);
-  const attachment={file_name:storedName,content_type:file.type,byte_size:file.size,storage_key:key,source,version,document_hash:documentHash,created_by:user.id},result=reuseAttachmentId?await admin.from("file_attachments").update({...attachment,deleted_at:null,deleted_by:null,delete_reason:null}).eq("id",reuseAttachmentId).select("id,file_name,created_at,version").single():await admin.from("file_attachments").insert({entity_type:entityType,entity_id:entityId,...attachment}).select("id,file_name,created_at,version").single(),{data:saved,error}=result;
+  const attachment={file_name:storedName,content_type:file.type,byte_size:file.size,storage_key:key,source,version,document_hash:documentHash,created_by:user.id};
+  let result;
+  if(source==="inventory_photo"){
+    const {data:oldPhoto,error:oldPhotoError}=await admin.from("file_attachments").select("id,storage_key").eq("entity_type","inventory").eq("entity_id",entityId).eq("source","inventory_photo").is("deleted_at",null).maybeSingle();
+    if(oldPhotoError)throw storageFailure("ATTACHMENT_LOOKUP_FAILED",oldPhotoError);
+    result=oldPhoto?await admin.from("file_attachments").update(attachment).eq("id",oldPhoto.id).select("id,file_name,created_at,version").single():await admin.from("file_attachments").insert({entity_type:entityType,entity_id:entityId,...attachment}).select("id,file_name,created_at,version").single();
+    const {data:saved,error}=result;if(error)throw storageFailure("ATTACHMENT_UPDATE_FAILED",error);
+    // shortcut: a failed delete only leaves an unreachable R2 object; add a cleanup job if retention becomes material.
+    if(oldPhoto&&oldPhoto.storage_key!==key)await r2Delete(oldPhoto.storage_key).catch(error=>console.error("Ersetztes Inventarfoto konnte nicht gelöscht werden",error));
+    return response(req,JSON.stringify(saved),201,{"Content-Type":"application/json"});
+  }
+  result=reuseAttachmentId?await admin.from("file_attachments").update({...attachment,deleted_at:null,deleted_by:null,delete_reason:null}).eq("id",reuseAttachmentId).select("id,file_name,created_at,version").single():await admin.from("file_attachments").insert({entity_type:entityType,entity_id:entityId,...attachment}).select("id,file_name,created_at,version").single();
+  const {data:saved,error}=result;
   if(error)throw storageFailure("ATTACHMENT_UPDATE_FAILED",error);
   return response(req,JSON.stringify(saved),201,{"Content-Type":"application/json"});
   }catch(error){

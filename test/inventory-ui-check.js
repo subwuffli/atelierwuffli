@@ -4,7 +4,7 @@ const app=fs.readFileSync('test/app.js','utf8'),html=fs.readFileSync('test/index
 for(const marker of [
   "inventory:renderInventory",
   "function renderInventory()",
-  "function inventoryItemForm()",
+  "function inventoryItemForm(itemId=null)",
   "function inventoryMovementForm(itemId,type)",
   "function toggleInventoryArchive(itemId,archived)",
   "from('inventory_stock_v1').select('*').order('name')",

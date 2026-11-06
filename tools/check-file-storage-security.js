@@ -7,7 +7,7 @@ assert.match(source,/const allowedOrigins=new Set\(\["https:\/\/subwuffli\.githu
 assert.match(source,/ORIGIN_NOT_ALLOWED/,'Fremde Browser-Herkünfte werden nicht abgewiesen');
 assert.match(source,/const allowedFileTypes=new Set\(\["application\/pdf","image\/jpeg","image\/png","image\/webp"\]\)/,'Dateitypen sind nicht auf die erlaubte Liste begrenzt');
 assert.match(source,/const isAllowedFile=/,'Dateisignatur wird nicht geprüft');
-assert.doesNotMatch(source,/startsWith\("image\/"\)/,'Beliebige Bildtypen sind noch erlaubt');
+assert.match(source,/source==="inventory_photo"&&\(entityType!=="inventory"\|\|!file\.type\.startsWith\("image\/"\)\)/,'Inventarfotos werden nicht auf Bilddateien begrenzt');
 for(const [name,html,supabaseOrigin] of [['Test',testHtml,'https://xiqbveuuhngeosqetfuo.supabase.co'],['Live',liveHtml,'https://johkbmlozygtfjsqfkdu.supabase.co']]){
   assert.match(html,/Content-Security-Policy/,`${name}-CSP fehlt`);
   for(const origin of [supabaseOrigin,'https://openplzapi.org','https://nominatim.openstreetmap.org','https://router.project-osrm.org'])assert(html.includes(origin),`${name}-CSP blockiert ${origin}`);
