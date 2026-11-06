@@ -19,6 +19,7 @@ for(const marker of [
 assert.match(html,/data-view="inventory">Inventar<\/button>/);
 assert.match(css,/inventory-low-stock/);
 assert.match(css,/inventory-photo-view/);
+assert.match(css,/tr\.mobile-actions-expanded \.inventory-actions/,'Inventaraktionen dürfen mobil nur nach dem Öffnen sichtbar sein');
 assert.match(app,/if\(type==='out'&&quantity>available\)/,'UI muss einen lokalen Negativbestandschutz zeigen');
 assert.doesNotMatch(app,/inventory_items[^\n]{0,120}\.update\(/i,'Bestand darf nicht direkt überschrieben werden');
 console.log('inventory-ui-check: ok');
