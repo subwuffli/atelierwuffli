@@ -79,11 +79,12 @@ Deno.serve(async req=>{let uploadedKey="",reuseAttachmentId="",action="",userId=
   if(!(entityType in allowed)||!entityId||!(file instanceof File)||file.size>8_000_000)return response(req,JSON.stringify({error:"INVALID_FILE"}),400,{"Content-Type":"application/json"});
   const bytes=new Uint8Array(await file.arrayBuffer());
   if(!isAllowedFile(file,bytes))return response(req,JSON.stringify({error:"INVALID_FILE"}),400,{"Content-Type":"application/json"});
-  let parent:{id:string;archived?:boolean;deleted_at?:string|null}|null=null,parentError:{message:string}|null=null;
-  if(entityType==="inventory")({data:parent,error:parentError}=await admin.from("inventory_items").select("id,archived").eq("id",entityId).maybeSingle());
-  else ({data:parent,error:parentError}=await admin.from(allowed[entityType as keyof typeof allowed]).select("id,deleted_at").eq("id",entityId).maybeSingle());
+  const isInventory=entityType==="inventory",parentResult=isInventory
+    ?await admin.from("inventory_items").select("id,archived").eq("id",entityId).maybeSingle()
+    :await admin.from(allowed[entityType as keyof typeof allowed]).select("id,deleted_at").eq("id",entityId).maybeSingle();
+  const parent=parentResult.data as {id:string;archived?:boolean;deleted_at?:string|null}|null,parentError=parentResult.error;
   if(parentError)return response(req,JSON.stringify({error:"PARENT_LOOKUP_FAILED",detail:parentError.message}),500,{"Content-Type":"application/json"});
-  if(!parent||(entityType==="inventory"?parent.archived:parent.deleted_at))return response(req,JSON.stringify({error:"PARENT_NOT_FOUND"}),404,{"Content-Type":"application/json"});
+  if(!parent||(isInventory?parent.archived:parent.deleted_at))return response(req,JSON.stringify({error:"PARENT_NOT_FOUND"}),404,{"Content-Type":"application/json"});
   const source=String(form.get("source")||"upload"),documentHash=source==="generated_pdf"?String(form.get("documentHash")||""):null;if(source!=="upload"&&source!=="generated_pdf"&&source!=="inventory_photo")return response(req,JSON.stringify({error:"INVALID_SOURCE"}),400,{"Content-Type":"application/json"});
   if(source==="inventory_photo"&&(entityType!=="inventory"||!file.type.startsWith("image/")))return response(req,JSON.stringify({error:"INVALID_FILE"}),400,{"Content-Type":"application/json"});
   if(source==="generated_pdf"&&!/^[a-f0-9]{64}$/.test(documentHash||""))return response(req,JSON.stringify({error:"INVALID_DOCUMENT_HASH"}),400,{"Content-Type":"application/json"});
