@@ -1,7 +1,7 @@
 # Projektstand – Atelier Wuffli ERP
 
 Stand: 7. November 2026
-Live-Version: `V0.0.132.0` · Test-Version: `TEST V0.0.132.0`
+Live-Version: `V0.0.133.0` · Test-Version: `TEST V0.0.133.0`
 
 ## Betrieb und Architektur
 
@@ -21,7 +21,7 @@ Live-Version: `V0.0.132.0` · Test-Version: `TEST V0.0.132.0`
 - Statistik, Suche, Papierkorb, Archivierung abgeschlossener Aufträge und Inventar
 - Inventar mit Bestandsbewegungen, Mindestbestand, Archivierung und Fotos
 - Persönliches Erscheinungsbild, barriereärmere Bedienung und mobile Navigation
-- Upload-Schutz mit maximal 20 Dateien je Benutzer und voller Stunde
+- Upload-Schutz mit maximal 60 Dateien je Benutzer und voller Stunde sowie genauer Uhrzeit der nächsten Freigabe
 
 ## Verbindlicher Release-Ablauf
 
