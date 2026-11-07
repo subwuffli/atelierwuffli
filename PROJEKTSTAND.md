@@ -1,6 +1,6 @@
 # Projektstand – Atelier Wuffli ERP
 
-Stand: 7. November 2026  
+Stand: 7. November 2026
 Live-Version: `V0.0.131.0` · Test-Version: `TEST V0.0.131.0`
 
 ## Betrieb und Architektur
