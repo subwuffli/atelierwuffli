@@ -27,6 +27,9 @@ jobs:
       - name: Release pruefen
         shell: pwsh
         run: ./tools/release-check.ps1 -Strict
+      - name: Test-zu-Live-Promotion pruefen
+        shell: pwsh
+        run: ./tools/promote-test-to-live.ps1 -VerifyOnly
       - name: Inventar pruefen
         run: node test/inventory-edit-photo-check.js
   deploy:

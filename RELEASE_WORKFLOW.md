@@ -8,7 +8,7 @@
 ```
 
 3. Bei einem `STOP` keine Live-Veröffentlichung verlangen. Zuerst das fehlende Merkmal oder die passende Live-SQL-Migration klären. Hinweise zu Test-Banner, URLs und Versionsnummern sind erwartete Umgebungsunterschiede.
-4. Nach erfolgreichem Test klar schreiben: **„Live deployen“**. Dann wird vor dem Push erneut geprüft, die additive Live-Migration ausgeführt und danach die veröffentlichte Version kontrolliert.
+4. Nach erfolgreichem Test klar schreiben: **„Live deployen“**. Dann wird zuerst `./tools/promote-test-to-live.ps1 -Apply` ausgeführt, danach erneut geprüft, die additive Live-Migration ausgeführt und erst dann veröffentlicht.
 
 ## Was du mir jeweils sagen solltest
 
