@@ -1,4 +1,4 @@
-const assert=require('node:assert/strict'),fs=require('node:fs'),source=fs.readFileSync('supabase/functions/file-storage/index.ts','utf8'),testHtml=fs.readFileSync('test/index.html','utf8'),liveHtml=fs.readFileSync('index.html','utf8'),quota=fs.readFileSync('supabase/test-file-upload-rate-limit-v0132.sql','utf8');
+const assert=require('node:assert/strict'),fs=require('node:fs'),source=fs.readFileSync('supabase/functions/file-storage/index.ts','utf8'),testHtml=fs.readFileSync('test/index.html','utf8'),liveHtml=fs.readFileSync('index.html','utf8'),quota=fs.readFileSync('supabase/test-file-upload-rate-limit-v0133.sql','utf8'),testApp=fs.readFileSync('test/app.js','utf8');
 const guard='const {data:isMember,error:memberError}=await userClient.rpc("is_erp_member_v1");';
 assert(source.includes(guard),'ERP-Mitgliedschaft wird nicht geprüft');
 assert(source.indexOf(guard)<source.indexOf('const admin=createClient'),'Service-Zugriff beginnt vor der Mitgliedschaftsprüfung');
@@ -10,8 +10,10 @@ assert.match(source,/const isAllowedFile=/,'Dateisignatur wird nicht geprüft');
 assert.match(source,/source==="inventory_photo"&&\(entityType!=="inventory"\|\|!file\.type\.startsWith\("image\/"\)\)/,'Inventarfotos werden nicht auf Bilddateien begrenzt');
 assert.match(source,/consume_file_upload_quota_v1/,'Dateiuploads haben kein serverseitiges Mengenlimit');
 assert.match(source,/UPLOAD_RATE_LIMITED/,'Das Upload-Limit meldet keine eindeutige Antwort');
-assert.match(quota,/where public\.file_upload_rate_limits\.upload_count<20/,'Das Upload-Limit sperrt nicht nach 20 Uploads pro Stunde');
+assert.match(quota,/where public\.file_upload_rate_limits\.upload_count<60/,'Das Upload-Limit sperrt nicht nach 60 Uploads pro Stunde');
 assert.match(quota,/grant execute on function public\.consume_file_upload_quota_v1\(uuid\) to service_role/,'Das Upload-Limit ist für Browserbenutzer erreichbar');
+assert.match(source,/\{error:"UPLOAD_RATE_LIMITED",retryAt\}/,'Das Upload-Limit nennt den Zeitpunkt der Freigabe nicht');
+assert.match(testApp,/Upload-Limit erreicht\. Du kannst ab/,'Die App erklärt nicht, wann Uploads wieder möglich sind');
 for(const [name,html,supabaseOrigin] of [['Test',testHtml,'https://xiqbveuuhngeosqetfuo.supabase.co'],['Live',liveHtml,'https://johkbmlozygtfjsqfkdu.supabase.co']]){
   assert.match(html,/Content-Security-Policy/,`${name}-CSP fehlt`);
   for(const origin of [supabaseOrigin,'https://openplzapi.org','https://nominatim.openstreetmap.org','https://router.project-osrm.org'])assert(html.includes(origin),`${name}-CSP blockiert ${origin}`);

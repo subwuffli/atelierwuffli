@@ -23,7 +23,7 @@ Test und Live bleiben absichtlich als getrennte, veröffentlichte Artefakte erha
 
 ## Aktueller Teststand
 
-`TEST V0.0.132.0` ergänzt ein serverseitiges Upload-Limit von 20 Dateien je Benutzer und voller Stunde. Es schützt R2 vor versehentlich sehr vielen Uploads; bei Erreichen des Limits nennt die App die nächste volle Stunde. Die Migration liegt unter `supabase/test-file-upload-rate-limit-v0132.sql`; die Test-Edge-Function `file-storage` wurde auf Version 39 veröffentlicht.
+`TEST V0.0.133.0` erhöht das serverseitige Upload-Limit auf 60 Dateien je Benutzer und voller Stunde. Bei Erreichen nennt die App die genaue Uhrzeit der nächsten Freigabe. Die Migration liegt unter `supabase/test-file-upload-rate-limit-v0133.sql`.
 
 `TEST V0.0.128.0` setzt die sieben Punkte der Apple-Designprüfung um: kontrastfeste Rückkehrmarkierung, Schutz ungespeicherter modaler Formulare, Rückkehr mit Ursprung/Filter/Sortierung/Scrollposition und Tastaturfokus, per Tastatur und Escape bedienbares mobiles Menü, zugängliche Dialogtitel und Statusmeldungen, vollständige Berücksichtigung reduzierter Bewegung bei Ladeindikatoren sowie eine in vier Gruppen gegliederte Seitenleiste. Datenexport bleibt unter Einstellungen → Datensicherung erreichbar. Meldungen mit „Rückgängig“ bleiben bis zur Bedienung oder Schliessung sichtbar. Erfolgreich gespeicherte Formulare schliessen ohne Verwerfen-Rückfrage. Eine neue Datenbankmigration ist nicht nötig.
 
