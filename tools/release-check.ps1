@@ -53,3 +53,4 @@ if($failed){
   Write-Host 'STOP: Erst Unterschiede und benoetigte Live-SQL-Migrationen pruefen. Kein Live-Deploy.' -ForegroundColor Yellow
   if($Strict){exit 1}
 }else{Write-Host 'BEREIT: Technische Vorpruefung bestanden.' -ForegroundColor Green}
+$global:LASTEXITCODE=0
