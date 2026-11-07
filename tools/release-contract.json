@@ -5,6 +5,7 @@
     {"name":"Startseite Heute im Atelier", "app":["window.erpHome.render()","order-status-filter","invoice-status-filter"], "files":["home.js","home.css"]},
     {"name":"Zahlungsvalidierung", "app":["function bindRequiredPaymentFields"], "testMigration":"test-payment-validation-v0126.sql", "liveMigration":"live-payment-validation-v0127.sql"},
     {"name":"Inventar", "app":["function renderInventory","create_inventory_item_v1"], "testMigration":"test-inventory-v0106.sql", "liveMigration":"live-inventory-v0127.sql"},
+    {"name":"Inventar bearbeiten und Fotos", "app":["function openInventoryPhoto","inventory_photo"], "css":[".inventory-photo-preview"], "edge":["source!==\"inventory_photo\"","source===\"inventory_photo\""], "testMigration":"test-inventory-edit-photo-v0129.sql", "liveMigration":"live-inventory-edit-photo-v0131.sql"},
     {"name":"Adresssuche", "app":["function mountAddressAutocomplete"], "css":[".address-suggestions"]},
     {"name":"Persoenliche Einstellungen", "app":["function saveUserPreferences","financeMonth=e.target.value;saveUserPreferences()"], "testMigration":"test-user-preferences-v0044.sql", "liveMigration":"live-user-preferences-v0053.sql"},
     {"name":"Positionsvorlagen", "app":["function openPositionTemplates"], "css":[".template-row"], "testMigration":"test-position-templates-v0045.sql", "liveMigration":"live-position-templates-v0054.sql"},

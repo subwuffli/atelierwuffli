@@ -13,10 +13,13 @@ Die Testumgebung wird unter `/test/` derselben GitHub-Pages-Site veröffentlicht
 
 1. Neue Funktionen zuerst unter `test/` umsetzen und veröffentlichen.
 2. Mit Testbenutzern und Testdaten prüfen.
-3. Nach Freigabe die getesteten Änderungen kontrolliert in die Live-Dateien übernehmen.
-4. Datenbankmigrationen zuerst im Testprojekt und erst nach erfolgreichem Test im Live-Projekt ausführen.
+3. Vor jedem Live-Release `powershell -ExecutionPolicy Bypass -File tools\release-check.ps1 -Strict` ausführen. Bei einem Fehler keinen Live-Deploy starten. GitHub Pages führt dieselbe Prüfung automatisch vor jeder Veröffentlichung aus.
+4. Nach Freigabe die getesteten Änderungen kontrolliert in die Live-Dateien übernehmen.
+5. Datenbankmigrationen zuerst im Testprojekt und erst nach erfolgreichem Test im Live-Projekt ausführen.
 
 Die Publishable Keys der Browser-Apps dürfen öffentlich sein. Secret- und Service-Role-Schlüssel dürfen niemals im Repository gespeichert werden.
+
+Die Geschäftslogik (`app.js`) und das Basisdesign (`styles.css`) werden von Test und Live gemeinsam genutzt. Ausschliesslich `environment.js` sowie `test/environment.js` enthalten die jeweilige Supabase-Verbindung; `test/styles.css` enthält nur den Testumgebungs-Hinweis und seine Abstände.
 
 ## Aktueller Teststand
 

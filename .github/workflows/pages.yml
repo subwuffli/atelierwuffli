@@ -15,7 +15,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository laden
+        uses: actions/checkout@v6
+      - name: Node einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Release pruefen
+        shell: pwsh
+        run: ./tools/release-check.ps1 -Strict
+      - name: Inventar pruefen
+        run: node test/inventory-edit-photo-check.js
   deploy:
+    needs: verify
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

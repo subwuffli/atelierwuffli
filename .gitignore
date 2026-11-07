@@ -8,3 +8,6 @@ Supabase.txt
 graphify-out/
 output/
 tmp/
+backups/
+.wrangler/
+DockerDesktopInstaller.exe

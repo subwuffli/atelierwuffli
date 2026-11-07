@@ -4,7 +4,7 @@ param([switch]$Strict)
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 Set-Location $root
-$node='C:\Users\wuffl\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe'
+$node=(Get-Command node -ErrorAction Stop).Source
 $failed=$false
 
 function Check($name,[scriptblock]$action){
@@ -14,7 +14,7 @@ function Check($name,[scriptblock]$action){
 
 Check 'JavaScript Live' {& $node --check app.js;if($LASTEXITCODE){throw 'Syntaxfehler'}}
 Check 'JavaScript Test' {& $node --check test/app.js;if($LASTEXITCODE){throw 'Syntaxfehler'}}
-Check 'Keine fehlerhaften Git-Zeichen' {git diff --check;if($LASTEXITCODE){throw 'Whitespace-Fehler'}}
+Check 'Keine fehlerhaften Git-Zeichen' {git -c "safe.directory=$root" diff --check;if($LASTEXITCODE){throw 'Whitespace-Fehler'}}
 
 $liveVersion=(Get-Content VERSION -Raw).Trim()
 $testVersion=([regex]::Match((Get-Content test/app.js -Raw),"APP_VERSION='([^']+)'")).Groups[1].Value
@@ -23,8 +23,9 @@ Write-Host "INFO  Live: $liveVersion | Test: $testVersion"
 
 $files=@(@('app.js','test/app.js'),@('styles.css','test/styles.css'),@('index.html','test/index.html'))
 foreach($pair in $files){
-  git diff --no-index --quiet -- $pair[0] $pair[1]
+  git -c "safe.directory=$root" diff --no-index --quiet -- $pair[0] $pair[1]
   if($LASTEXITCODE -eq 1){Write-Host "HINWEIS Unterschied Test/Live: $($pair[0])" -ForegroundColor Yellow}
+  elseif($LASTEXITCODE -ne 0){Write-Host "FEHLER Vergleich Test/Live nicht möglich: $($pair[0])" -ForegroundColor Red;$failed=$true}
 }
 
 $testMigrations=Get-ChildItem supabase\test-*.sql -ErrorAction SilentlyContinue
@@ -44,6 +45,7 @@ foreach($feature in $contract.features){
   }
   foreach($marker in @($feature.app|Where-Object {$_})){if((Select-String -Path test\app.js -SimpleMatch $marker -Quiet) -and !(Select-String -Path app.js -SimpleMatch $marker -Quiet)){Write-Host "FEHLER $($feature.name): App-Merkmal fehlt in Live ($marker)" -ForegroundColor Red;$failed=$true}}
   foreach($marker in @($feature.css|Where-Object {$_})){if((Select-String -Path test\styles.css -SimpleMatch $marker -Quiet) -and !(Select-String -Path styles.css -SimpleMatch $marker -Quiet)){Write-Host "FEHLER $($feature.name): CSS-Merkmal fehlt in Live ($marker)" -ForegroundColor Red;$failed=$true}}
+  foreach($marker in @($feature.edge|Where-Object {$_})){if(!(Select-String -Path supabase\functions\file-storage\index.ts -SimpleMatch $marker -Quiet)){Write-Host "FEHLER $($feature.name): Edge-Function-Merkmal fehlt ($marker)" -ForegroundColor Red;$failed=$true}}
   if($feature.testMigration -and (Test-Path "supabase\$($feature.testMigration)") -and !(Test-Path "supabase\$($feature.liveMigration)")){Write-Host "FEHLER $($feature.name): Live-Migration fehlt ($($feature.liveMigration))" -ForegroundColor Red;$failed=$true}
 }
 
