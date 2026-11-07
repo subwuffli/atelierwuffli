@@ -30,8 +30,21 @@ jobs:
       - name: Test-zu-Live-Promotion pruefen
         shell: pwsh
         run: ./tools/promote-test-to-live.ps1 -VerifyOnly
-      - name: Inventar pruefen
-        run: node test/inventory-edit-photo-check.js
+      - name: Fachliche Pruefungen
+        run: |
+          node test/home-appearance-check.js
+          node test/inventory-edit-photo-check.js
+          node test/inventory-schema.test.js
+          node test/inventory-ui-check.js
+          node test/payment-validation-check.js
+          node test/statistics-check.js
+          node test/bookkeeping-monthly-check.js
+          node tools/check-compact-document-lists.js
+          node tools/check-document-tabs.js
+          node tools/check-file-storage-security.js
+          node tools/check-pdf-storage-recovery.js
+          node tools/check-qr-layout.js
+          node tools/live-inventory-promotion-check.js
   deploy:
     needs: verify
     environment:

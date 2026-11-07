@@ -1,54 +1,32 @@
 # Atelier Wuffli ERP
 
-Aktuelle Version: **V0.0.36**
+Deutschsprachiges ERP für Kunden, Termine, Aufträge, Rechnungen, Quittungen, Buchhaltung und Inventar.
 
-Eine vollständig getrennte Testumgebung liegt unter `test/`. Einrichtung und Arbeitsablauf sind in `TESTUMGEBUNG.md` beschrieben.
+## Aktueller Betrieb
 
-Bei jeder veröffentlichten Änderung wird die letzte Versionsstelle um eins erhöht (`V0.0.2`, `V0.0.3`, …). Die Version wird in der Seitenleiste oberhalb von **Sperren** angezeigt.
+- **Live:** https://subwuffli.github.io/atelierwuffli/
+- **Test:** https://subwuffli.github.io/atelierwuffli/test/
+- **Daten:** getrennte Supabase-Projekte mit Benutzeranmeldung und Row-Level-Security.
+- **Dateien:** PDFs und Inventarfotos werden über die Supabase Edge Function `file-storage` im je Umgebung getrennten Cloudflare-R2-Speicher abgelegt.
 
-Deutschsprachiges Mehrbenutzer-ERP für Kunden, Aufträge, Rechnungen und Quittungen. Die Anwendung wird über GitHub Pages ausgeliefert; Anmeldung und sämtliche Geschäftsdaten liegen in Supabase.
+Die App wird als statische Seite über GitHub Pages veröffentlicht. Der Publishable Key im Browser ist absichtlich öffentlich; Secret- und Service-Role-Schlüssel gehören niemals ins Repository.
 
-Bezahlte Rechnungen können als nummerierte Quittung (`QU-JJ-MM-TT-XXX`) ausgegeben werden. Quittungen stehen als PDF und Druckansicht zur Verfügung.
-Erstellte Quittungen werden im eigenen Navigationsbereich **Quittungen** gesammelt. Offene Rechnungen werden nach Überschreiten des Fälligkeitsdatums rot als **Überfällig** hervorgehoben.
-Die Rechnungsfälligkeit wird aus dem Abhol-/Lieferdatum plus Zahlungsfrist berechnet und bei einer Änderung des Auftrags automatisch aktualisiert.
-Bereits erstellte Quittungen werden bei späteren Änderungen an Rechnung oder Auftrag automatisch inhaltlich aktualisiert; Quittungsnummer und Datum bleiben erhalten.
-Ausgaben werden mit Datum, Betrag und Beschreibung erfasst und monatlich ausgewertet. Einnahmen entstehen automatisch aus bezahlten Rechnungen. Beide Bereiche bieten Monatsberichte als PDF und ein Balkendiagramm der letzten zwölf Monate.
-Rechnungs- und Quittungs-PDFs verwenden ein ruhiges Rosé-Design mit feinem Rahmen, Belegübersicht, hervorgehobener Summe und Dankesbereich.
+## Entwicklung und Veröffentlichung
 
-## Supabase einmalig einrichten
+1. Neue Funktionen nur unter `test/` entwickeln und in der Testumgebung prüfen.
+2. Vor dem Live-Release `powershell -ExecutionPolicy Bypass -File tools\release-check.ps1 -Strict` ausführen.
+3. Erst nach ausdrücklicher Freigabe das Frontend mit `powershell -ExecutionPolicy Bypass -File tools\promote-test-to-live.ps1 -Apply` erzeugen.
+4. Zugehörige SQL-Migrationen und Edge-Function-Deployments zuerst in Test, nach erfolgreicher Prüfung in Live ausführen.
+5. GitHub Actions prüft den Release vor dem GitHub-Pages-Deployment automatisch.
 
-1. Im Supabase-Dashboard den **SQL Editor** öffnen.
-2. Den vollständigen Inhalt von `supabase/migration.sql` ausführen.
-3. Unter **Authentication → Users** alle gewünschten ERP-Benutzer anlegen.
-4. Selbstregistrierung deaktiviert lassen, wenn Benutzer nur durch den Administrator angelegt werden sollen.
-5. Danach die GitHub-Pages-Anwendung neu laden und anmelden.
+Die detaillierten Anweisungen stehen in [TESTUMGEBUNG.md](TESTUMGEBUNG.md) und [RELEASE_WORKFLOW.md](RELEASE_WORKFLOW.md). Der aktuelle technische Stand steht in [PROJEKTSTAND.md](PROJEKTSTAND.md).
 
-Bei einem bestehenden Datenbestand für V0.0.12 einmalig `supabase/hotfix-quittungen.sql` im SQL Editor ausführen.
-Für die Finanzbereiche ab V0.0.16 einmalig die aktualisierte `supabase/migration.sql` erneut vollständig ausführen; die Migration ist wiederholbar und erhält bestehende Daten.
+## Lokale Prüfungen
 
-Falls bereits Daten in der früheren Tabelle `erp_data` liegen, übernimmt die Migration sie beim ersten Lauf automatisch in die neuen Tabellen. Die alte Tabelle wird vorsichtshalber nicht gelöscht.
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\release-check.ps1 -Strict
+powershell -ExecutionPolicy Bypass -File tools\promote-test-to-live.ps1 -VerifyOnly
+node tools\check-file-storage-security.js
+```
 
-Das Schema ist relational aufgebaut. Kunden, Lieferadressen, Aufträge, Positionen, Rechnungen und Zähler besitzen jeweils eigene Tabellen und können später durch Spalten oder zusätzliche Tabellen erweitert werden.
-
-## Datensicherung
-
-- **Exportieren** lädt den vollständigen Supabase-Datenbestand als JSON-Datei herunter.
-- **Importieren** ersetzt nach einer deutlichen Bestätigung den gesamten Datenbestand transaktional.
-- Der Import unterstützt alte Backups der Version 1 sowie neue Backups der Version 2.
-- Dokumentnummern werden atomar in Supabase vergeben, damit mehrere Benutzer keine doppelten Nummern erzeugen.
-- Eine Revisionsprüfung verhindert, dass ein Benutzer unbemerkt Änderungen eines anderen überschreibt.
-- Supabase Realtime meldet Änderungen anderer Geräte; die Anwendung lädt sie automatisch nach, solange kein Formular geöffnet ist.
-- Kunden können nach Kundennummer oder Name auf- und absteigend sortiert werden.
-- Derselbe Kunde, Auftrag oder dieselbe Rechnung kann nicht gleichzeitig auf zwei Geräten bearbeitet werden. Die Sperre wird beim Schließen freigegeben und läuft bei Verbindungsabbrüchen automatisch aus.
-- Typische fehlerhafte UTF-8-Umlaute aus alten Backups werden beim Laden und Import automatisch repariert.
-
-## Sicherheit
-
-- Nur bei Supabase angemeldete Benutzer erhalten über Row Level Security Zugriff.
-- Alle angelegten Benutzer teilen denselben ERP-Datenbestand.
-- Die Supabase-Publishable-Key im Browser ist öffentlich und wird durch Authentifizierung und RLS abgesichert.
-- Passwörter und Service-Role-Keys dürfen niemals im Repository gespeichert werden.
-
-## Veröffentlichung
-
-Pushes auf `main` werden über `.github/workflows/pages.yml` automatisch auf GitHub Pages veröffentlicht.
+Die vollständige Liste der schnellen Prüfungen ist in `.github/workflows/pages.yml` hinterlegt und läuft vor jeder Veröffentlichung.
